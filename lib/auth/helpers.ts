@@ -18,7 +18,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     if (authError || !user) return null;
 
     // Ambil profile + outlet name sekaligus via SQL function
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await (supabase as any)
       .rpc('get_user_profile', { user_id: user.id });
 
     if (profileError || !profile) return null;
