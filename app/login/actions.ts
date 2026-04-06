@@ -46,17 +46,19 @@ export async function loginAction(formData: FormData) {
   }
 
   // ── Cek profile exists & AKTIF ───────────────────────────
-  const { data: profile, error: profileError } = await supabase
+  const { data: profileData, error: profileError } = await supabase
     .from('profiles')
     .select('status, role, outlet_id')
     .eq('id', data.user.id)
     .single();
 
+  const profile = profileData as { status: string; role: string; outlet_id: number } | null;
+
   if (profileError || !profile) {
-    await supabase.auth.signOut();
-    redirect('/login?error=' + encodeURIComponent(
-      'Akun tidak terdaftar di sistem. Hubungi admin.'
-    ));
+  await supabase.auth.signOut();
+  redirect('/login?error=' + encodeURIComponent(
+    'Akun tidak terdaftar di sistem. Hubungi admin.'
+  ));
   }
 
   if (profile.status !== 'AKTIF') {
