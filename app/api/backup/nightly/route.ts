@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
 
   try {
     // Ambil semua outlet aktif
-    const { data: outlets } = await db.from('outlets').select('id, nama').order('id');
+    const { data: outlets } = await db.from('outlets').select('id, nama').order('id') as unknown as { data: { id: number; nama: string }[] | null };
     if (!outlets || outlets.length === 0) {
       return NextResponse.json({ ok: false, msg: 'Tidak ada outlet.' });
     }
