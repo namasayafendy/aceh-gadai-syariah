@@ -48,8 +48,8 @@ export async function POST(request: NextRequest) {
       .limit(5);
 
     const allRows = [
-      ...(rows ?? []).map(r => ({ ...r, _source: 'GADAI' })),
-      ...(sjbRows ?? []).map(r => ({ ...r, _source: 'SJB' })),
+      ...(rows ?? []).map((r: any) => ({ ...r, _source: 'GADAI' })),
+      ...(sjbRows ?? []).map((r: any) => ({ ...r, _source: 'SJB' })),
     ];
 
     if (allRows.length === 0) {
