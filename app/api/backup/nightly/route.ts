@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Audit log untuk backup nightly
-    await db.from('audit_log').insert({
+    await (db as any).from('audit_log').insert({
       user_nama:  'CRON',
       tabel:      'backup_nightly',
       record_id:  tgl,
