@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     // Ambil outlet name
     const { data: outlet } = await db.from('outlets').select('nama').eq('id', outletId).single();
-    const outletName = (outlet?.nama as string) ?? '';
+    const outletName = outlet ? String(outlet.nama ?? '') : '';
 
     let html = '';
 
