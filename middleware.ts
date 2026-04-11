@@ -46,7 +46,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/auth') ||      // Supabase auth callback
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
-    pathname.startsWith('/api/auth');    // Auth API routes
+    pathname.startsWith('/api/');    // Auth API routes
 
   if (!isPublicRoute && !user) {
     // Belum login → redirect ke /login
