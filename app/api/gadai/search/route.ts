@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       .select('nama')
       .eq('id', outletId)
       .single();
-    const myOutletName = (outletRow?.nama as string) ?? '';
+    const myOutletName = outletRow ? String((outletRow as any).nama) : '';
 
     // Cari di tb_gadai: match barcode_a ATAU no_faktur
     const { data: rows, error } = await db

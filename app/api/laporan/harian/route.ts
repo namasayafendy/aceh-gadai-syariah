@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     // Ambil outlet name
     const { data: outletRow } = await db
       .from('outlets').select('nama').eq('id', outletId).single();
-    const outletName = (outletRow?.nama as string) ?? '';
+    const outletName = outletRow ? String((outletRow as any).nama) : ''
 
     // ── Helper: filter rows by tanggal + outlet (string compare) ─
     const filterByDate = (rows: any[], dateCol: string) =>

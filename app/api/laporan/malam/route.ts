@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
 
     const { data: outletRow } = await db
       .from('outlets').select('nama').eq('id', outletId).single();
-    const outletName = (outletRow?.nama as string) ?? '';
+    const outletName = outletRow ? String((outletRow as any).nama) : ''
 
     const tgl = body.tgl
       ?? new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
