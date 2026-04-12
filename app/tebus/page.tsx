@@ -11,6 +11,7 @@ import AppShell from '@/components/ui/AppShell';
 import PinModal from '@/components/ui/PinModal';
 import { useOutletId } from '@/components/auth/AuthProvider';
 import { formatRp, formatMoneyInput, formatMoneyInputSigned, parseMoney, formatDate } from '@/lib/format';
+import { printTebus } from '@/lib/print';
 
 type TebusStatus = '' | 'TEBUS' | 'PERPANJANG' | 'TAMBAH' | 'KURANG' | 'SITA' | 'JUAL';
 
@@ -604,7 +605,7 @@ export default function TebusPage() {
               ))}
             </div>
             <div className="success-actions">
-              <button className="btn btn-primary btn-full" onClick={() => alert('Cetak nota — akan diimplementasi')}>🖨️ Cetak</button>
+              <button className="btn btn-primary btn-full" onClick={() => printTebus({ idTebus: successData.idTebus, noFaktur: gadaiData?.no_faktur || '', status: successData.status, tglTebus: successData.tglTebus || new Date().toLocaleDateString('id-ID'), namaNasabah: gadaiData?.nama || '', kategori: gadaiData?.kategori || '', barang: gadaiData?.barang || '', jumlahGadai: gadaiData?.jumlah_gadai || 0, ujrahBerjalan, hariAktual, totalTebusSistem: totalSistem, jumlahBayar: jmlBayar, payment, kasir: successData.kasir, outlet: successData.outlet || '', alamat: successData.alamat || '', kota: successData.kota || '', telpon: successData.telpon || '', namaPerusahaan: successData.namaPerusahaan || 'PT. ACEH GADAI SYARIAH' })}>🖨️ Cetak</button>
               <button className="btn btn-outline btn-full" onClick={() => setSuccessData(null)}>Tutup</button>
             </div>
           </div>

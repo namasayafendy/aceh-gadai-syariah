@@ -36,6 +36,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/kas',       icon: '💼', label: 'Buku Kas',           section: 'Laporan', roles: ['ADMIN','OWNER'] },
   // Admin
   { href: '/edit',      icon: '✏️', label: 'Edit Transaksi',     section: 'Admin',   roles: ['ADMIN','OWNER'] },
+  { href: '/outlet',    icon: '⚙️', label: 'Settings Outlet',   section: 'Admin',   roles: ['OWNER'] },
+  { href: '/owner',     icon: '👑', label: 'Dashboard Owner',   section: 'Owner',   roles: ['OWNER'] },
   { href: '/backup',    icon: '💾', label: 'Backup & Bon',       section: 'Admin',   roles: ['ADMIN','OWNER'] },
 ];
 

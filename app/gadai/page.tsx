@@ -1,16 +1,11 @@
 'use client';
 
-// ============================================================
-// ACEH GADAI SYARIAH - Halaman Gadai Baru
-// File: app/gadai/page.tsx
-// Migrasi dari gadai.html (GAS)
-// ============================================================
-
 import { useState, useCallback, useEffect } from 'react';
 import AppShell from '@/components/ui/AppShell';
 import PinModal from '@/components/ui/PinModal';
 import { useOutletId } from '@/components/auth/AuthProvider';
 import { formatRp, formatNum, formatMoneyInput, formatMoneyInputSigned, parseMoney, formatDate } from '@/lib/format';
+import { printGadai } from '@/lib/print';
 
 const KATEGORI_OPTIONS = ['HANDPHONE', 'LAPTOP', 'ELEKTRONIK', 'EMAS', 'EMAS PAUN'];
 const GRADE_OPTIONS = ['A', 'B', 'C', 'D'];
@@ -22,7 +17,6 @@ interface TodayRow {
 
 export default function GadaiPage() {
   const outletId = useOutletId();
-
   const [nama, setNama] = useState('');
   const [noKtp, setNoKtp] = useState('');
   const [telp1, setTelp1] = useState('');
@@ -54,15 +48,12 @@ export default function GadaiPage() {
   const ujrahNominal = parseMoney(ujrahNominalRaw);
   const isEmas = ['EMAS', 'EMAS PAUN'].includes(kategori);
 
-  // ── Ujrah calculation (mirrors GAS logic) ───────────────
   useEffect(() => {
     if (!kategori || !taksiran || !jmlGadai) return;
     if (jmlGadai > taksiran) return;
     const useEmasFlat = isEmas && jmlGadai <= 1000000;
     const persen = useEmasFlat ? 0 : isEmas ? 2.8 : (jmlGadai <= 3000000 ? 8 : 7);
-    if (!persenManual) {
-      setUjrahPersen(useEmasFlat ? 'flat' : String(persen));
-    }
+    if (!persenManual) setUjrahPersen(useEmasFlat ? 'flat' : String(persen));
     if (!ujrahManual) {
       const ujrahPerHari = useEmasFlat ? 1000 : (persen / 100 / 30) * taksiran;
       const ujrahPerLima = isEmas ? 0 : (persen / 100 / 30) * 5 * taksiran;
@@ -73,10 +64,6 @@ export default function GadaiPage() {
     }
   }, [kategori, taksiran, jmlGadai, isEmas, persenManual, ujrahManual]);
 
-  // ── Breakdown (6 periods x 5 days, non-emas only) ──────
-  // FIX: match GAS logic exactly
-  // - Auto mode: ceil(ujrahPerLima * i / 1000) * 1000
-  // - Manual mode: ceil(nominal/6/1000)*1000 * i
   const breakdown = (() => {
     if (isEmas || !taksiran || !jmlGadai) return null;
     const persen = parseFloat(ujrahPersen) || 0;
@@ -87,9 +74,7 @@ export default function GadaiPage() {
       return [1, 2, 3, 4, 5, 6].map(i => perPeriod * i);
     } else {
       const ujrahPerLima = (persen / 100 / 30) * 5 * taksiran;
-      return [1, 2, 3, 4, 5, 6].map(i =>
-        Math.ceil(ujrahPerLima * i / 1000) * 1000
-      );
+      return [1, 2, 3, 4, 5, 6].map(i => Math.ceil(ujrahPerLima * i / 1000) * 1000);
     }
   })();
 
@@ -106,7 +91,7 @@ export default function GadaiPage() {
           payment: r.payment, kasir: r.kasir,
         })));
       }
-    } catch { /* silent */ }
+    } catch {}
     setLoadingList(false);
   }, [outletId]);
 
@@ -127,10 +112,7 @@ export default function GadaiPage() {
     if (jmlGadai > taksiran) { setError('Jumlah gadai tidak boleh melebihi taksiran!'); return; }
     if (payment === 'SPLIT') {
       const c = parseMoney(cashRaw), b = parseMoney(bankRaw);
-      if ((c + b) !== jmlGadai) {
-        setError(`Total split (${formatRp(c + b)}) harus sama dengan Jumlah Gadai (${formatRp(jmlGadai)})`);
-        return;
-      }
+      if ((c + b) !== jmlGadai) { setError(`Total split (${formatRp(c + b)}) harus = Jumlah Gadai (${formatRp(jmlGadai)})`); return; }
     }
     setError(''); setPinOpen(true);
   }
@@ -185,7 +167,6 @@ export default function GadaiPage() {
             </div>
             <button className="btn btn-outline btn-sm" onClick={resetForm}>↺ Reset</button>
           </div>
-
           <div className="form-section-label">DATA NASABAH</div>
           <div className="form-group"><label>Nama Nasabah *</label><input value={nama} onChange={e => setNama(e.target.value.toUpperCase())} placeholder="Nama lengkap" /></div>
           <div className="form-row">
@@ -193,7 +174,6 @@ export default function GadaiPage() {
             <div className="form-group"><label>Telepon 1 *</label><input value={telp1} onChange={e => setTelp1(e.target.value)} placeholder="08xx" /></div>
           </div>
           <div className="form-group"><label>Telepon 2</label><input value={telp2} onChange={e => setTelp2(e.target.value)} placeholder="Opsional" /></div>
-
           <div className="form-section-label">DATA BARANG</div>
           <div className="form-row">
             <div className="form-group">
@@ -205,149 +185,62 @@ export default function GadaiPage() {
             </div>
             <div className="form-group">
               <label>{isEmas ? 'Berat (gram)' : 'Grade'}</label>
-              {isEmas ? (
-                <input type="number" value={berat} onChange={e => setBerat(e.target.value)} placeholder="Berat (gram)" min="0" step="0.01" />
-              ) : (
-                <select value={grade} onChange={e => setGrade(e.target.value)}>
-                  <option value="">— Pilih —</option>
-                  {GRADE_OPTIONS.map(g => <option key={g}>{g}</option>)}
-                </select>
-              )}
+              {isEmas ? <input type="number" value={berat} onChange={e => setBerat(e.target.value)} placeholder="gram" min="0" step="0.01" />
+                : <select value={grade} onChange={e => setGrade(e.target.value)}><option value="">— Pilih —</option>{GRADE_OPTIONS.map(g => <option key={g}>{g}</option>)}</select>}
             </div>
           </div>
-          <div className="form-group"><label>Nama Barang *</label><input value={barang} onChange={e => setBarang(e.target.value.toUpperCase())} placeholder="Merk / Type / Spesifikasi" /></div>
+          <div className="form-group"><label>Nama Barang *</label><input value={barang} onChange={e => setBarang(e.target.value.toUpperCase())} placeholder="Merk / Type" /></div>
           <div className="form-row">
-            <div className="form-group"><label>Kelengkapan *</label><input value={kelengkapan} onChange={e => setKelengkapan(e.target.value)} placeholder="Kotak, Cas, dll" /></div>
-            <div className="form-group"><label>IMEI / SN / Kadar *</label><input value={imeiSn} onChange={e => setImeiSn(e.target.value)} placeholder="IMEI atau S/N" /></div>
+            <div className="form-group"><label>Kelengkapan *</label><input value={kelengkapan} onChange={e => setKelengkapan(e.target.value)} placeholder="Kotak, Cas" /></div>
+            <div className="form-group"><label>IMEI / SN *</label><input value={imeiSn} onChange={e => setImeiSn(e.target.value)} placeholder="IMEI / SN" /></div>
           </div>
-
           <div className="form-section-label">NOMINAL</div>
           <div className="form-row">
             <div className="form-group"><label>Taksiran *</label><input value={taksiranRaw} inputMode="numeric" placeholder="0" onChange={e => setTaksiranRaw(formatMoneyInput(e.target.value))} /></div>
             <div className="form-group"><label>Jml Gadai *</label><input value={jmlGadaiRaw} inputMode="numeric" placeholder="0" style={jmlGadai > taksiran && taksiran > 0 ? { borderColor: 'var(--red)' } : {}} onChange={e => setJmlGadaiRaw(formatMoneyInput(e.target.value))} /></div>
           </div>
-          {jmlGadai > taksiran && taksiran > 0 && (
-            <div className="alert-error">⚠️ Jumlah Gadai tidak boleh melebihi Taksiran ({formatRp(taksiran)})</div>
-          )}
+          {jmlGadai > taksiran && taksiran > 0 && <div className="alert-error">⚠️ Jumlah Gadai melebihi Taksiran ({formatRp(taksiran)})</div>}
           <div className="form-row">
-            <div className="form-group">
-              <label>Biaya Admin</label>
-              <input value="Rp 10.000" readOnly style={{ color: 'var(--text3)', cursor: 'not-allowed', background: 'var(--bg)' }} />
-              <div className="hint">Fix Rp 10.000 — tidak masuk kas, untuk surat saja</div>
-            </div>
+            <div className="form-group"><label>Biaya Admin</label><input value="Rp 10.000" readOnly style={{ color: 'var(--text3)', cursor: 'not-allowed', background: 'var(--bg)' }} /><div className="hint">Fix Rp 10.000</div></div>
             <div className="form-group"><label>Ujrah %</label><input type="text" value={ujrahPersen} placeholder="%" onChange={e => { setUjrahPersen(e.target.value); setPersenManual(true); setUjrahManual(false); }} /></div>
           </div>
           <div className="form-group"><label>Ujrah (Nominal) — bisa diedit</label><input value={ujrahNominalRaw} inputMode="numeric" placeholder="0" onChange={e => { setUjrahNominalRaw(formatMoneyInput(e.target.value)); setUjrahManual(true); }} /></div>
-
           {showCalc && (
             <div className="calc-box">
               <div className="c-title">📐 Kalkulasi Ujrah</div>
               <div className="calc-row"><span className="c-lbl">Taksiran</span><span className="c-val">{formatRp(taksiran)}</span></div>
-              <div className="calc-row">
-                <span className="c-lbl">Ujrah {useEmasFlat ? 'Rp 1.000/hari (flat)' : `${persenNum}%/bln`} → per {isEmas ? 'hari' : '5 hari'}</span>
-                <span className="c-val">{useEmasFlat ? formatRp(1000) + '/hari' : formatRp(isEmas ? Math.ceil((persenNum / 100 / 30) * taksiran / 1000) * 1000 : Math.ceil((persenNum / 100 / 30) * 5 * taksiran / 1000) * 1000)}</span>
-              </div>
+              <div className="calc-row"><span className="c-lbl">Ujrah {useEmasFlat ? 'flat' : `${persenNum}%/bln`} → per {isEmas ? 'hari' : '5 hari'}</span><span className="c-val">{useEmasFlat ? fmtRp(1000)+'/hari' : formatRp(isEmas ? Math.ceil((persenNum/100/30)*taksiran/1000)*1000 : Math.ceil((persenNum/100/30)*5*taksiran/1000)*1000)}</span></div>
               <div className="calc-row total"><span className="c-lbl">Jml Gadai Keluar</span><span className="c-val">{formatRp(jmlGadai)}</span></div>
-              {breakdown && (
-                <div className="ujrah-breakdown">
-                  <div className="u-title">Tabel Ujrah (di Surat Kontrak)</div>
-                  <div className="ujrah-grid">
-                    {breakdown.map((val, i) => (
-                      <div key={i} className="ujrah-cell">
-                        <div className="u-period">{(i * 5 + 1)}-{(i + 1) * 5} hari</div>
-                        <div className="u-amount">{formatRp(val)}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {breakdown && <div className="ujrah-breakdown"><div className="u-title">Tabel Ujrah (di Surat Kontrak)</div><div className="ujrah-grid">{breakdown.map((val,i) => <div key={i} className="ujrah-cell"><div className="u-period">{i*5+1}-{(i+1)*5} hari</div><div className="u-amount">{formatRp(val)}</div></div>)}</div></div>}
             </div>
           )}
-
           <div className="form-section-label">PEMBAYARAN</div>
-          <div className="payment-tabs">
-            {(['CASH', 'BANK', 'SPLIT'] as const).map(m => (
-              <div key={m} className={`ptab ${payment === m ? 'active' : ''}`} onClick={() => setPayment(m)}>
-                {m === 'CASH' ? '💵 CASH' : m === 'BANK' ? '🏦 BANK' : '💵+🏦 SPLIT'}
-              </div>
-            ))}
-          </div>
-          {payment === 'SPLIT' && (
-            <div className="form-row">
-              <div className="form-group"><label>Bagian Cash <span style={{ fontSize: 10, color: 'var(--text3)' }}>(boleh minus)</span></label><input value={cashRaw} inputMode="numeric" placeholder="0" onChange={e => setCashRaw(formatMoneyInputSigned(e.target.value))} /></div>
-              <div className="form-group"><label>Bagian Bank</label><input value={bankRaw} inputMode="numeric" placeholder="0" onChange={e => setBankRaw(formatMoneyInput(e.target.value))} /></div>
-            </div>
-          )}
-          {payment === 'SPLIT' && (
-            <div style={{ fontSize: 11, color: 'var(--text3)' }}>Total split: {formatRp(parseMoney(cashRaw) + parseMoney(bankRaw))}</div>
-          )}
-
+          <div className="payment-tabs">{(['CASH','BANK','SPLIT'] as const).map(m => <div key={m} className={`ptab ${payment===m?'active':''}`} onClick={() => setPayment(m)}>{m==='CASH'?'💵 CASH':m==='BANK'?'🏦 BANK':'💵+🏦 SPLIT'}</div>)}</div>
+          {payment === 'SPLIT' && <div className="form-row"><div className="form-group"><label>Cash</label><input value={cashRaw} inputMode="numeric" onChange={e => setCashRaw(formatMoneyInputSigned(e.target.value))} /></div><div className="form-group"><label>Bank</label><input value={bankRaw} inputMode="numeric" onChange={e => setBankRaw(formatMoneyInput(e.target.value))} /></div></div>}
+          {payment === 'SPLIT' && <div style={{fontSize:11,color:'var(--text3)'}}>Total split: {formatRp(parseMoney(cashRaw)+parseMoney(bankRaw))}</div>}
           {error && <div className="alert-error">⚠️ {error}</div>}
-          <div className="submit-area">
-            <button className="btn btn-success btn-full" onClick={requestSubmit} disabled={submitting}>
-              {submitting ? '⏳ Menyimpan...' : '💰 SUBMIT GADAI'}
-            </button>
-          </div>
+          <div className="submit-area"><button className="btn btn-success btn-full" onClick={requestSubmit} disabled={submitting}>{submitting ? '⏳ Menyimpan...' : '💰 SUBMIT GADAI'}</button></div>
         </div>
-
         <div className="form-right">
-          <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            Data Transaksi Gadai (Hari Ini)
-            <button className="btn btn-outline btn-sm" onClick={loadTodayList} disabled={loadingList}>{loadingList ? '⏳' : '↻ Refresh'}</button>
-          </div>
-          <div className="tbl-wrap">
-            <table>
-              <thead><tr><th>No Faktur</th><th>Nama</th><th>Barang</th><th className="num">Gadai</th><th>JT</th><th>Bayar</th><th>Kasir</th></tr></thead>
-              <tbody>
-                {todayList.length === 0 ? (
-                  <tr><td colSpan={7} className="empty-state">{loadingList ? 'Memuat...' : 'Belum ada transaksi hari ini'}</td></tr>
-                ) : todayList.map((r, i) => (
-                  <tr key={i}>
-                    <td style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{r.no_faktur}</td>
-                    <td style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.nama}</td>
-                    <td style={{ maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.barang}</td>
-                    <td className="num">{formatRp(r.jumlah_gadai)}</td>
-                    <td style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{formatDate(r.tgl_jt)}</td>
-                    <td><span className={`badge ${(r.payment || '').toLowerCase()}`}>{r.payment || '—'}</span></td>
-                    <td>{r.kasir || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <div className="section-title" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>Data Transaksi Gadai (Hari Ini)<button className="btn btn-outline btn-sm" onClick={loadTodayList} disabled={loadingList}>{loadingList?'⏳':'↻ Refresh'}</button></div>
+          <div className="tbl-wrap"><table><thead><tr><th>No Faktur</th><th>Nama</th><th>Barang</th><th className="num">Gadai</th><th>JT</th><th>Bayar</th><th>Kasir</th></tr></thead><tbody>
+            {todayList.length===0?<tr><td colSpan={7} className="empty-state">{loadingList?'Memuat...':'Belum ada transaksi hari ini'}</td></tr>
+            :todayList.map((r,i)=><tr key={i}><td style={{fontFamily:'var(--mono)',fontSize:11}}>{r.no_faktur}</td><td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.nama}</td><td style={{maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.barang}</td><td className="num">{formatRp(r.jumlah_gadai)}</td><td style={{fontFamily:'var(--mono)',fontSize:11}}>{formatDate(r.tgl_jt)}</td><td><span className={`badge ${(r.payment||'').toLowerCase()}`}>{r.payment||'—'}</span></td><td>{r.kasir||'—'}</td></tr>)}
+          </tbody></table></div>
         </div>
       </div>
-
-      <PinModal open={pinOpen} action={`Submit Gadai — ${nama}`}
-        onSuccess={(pin, kasirName) => doSubmit(pin, kasirName)} onCancel={() => setPinOpen(false)} />
-
+      <PinModal open={pinOpen} action={`Submit Gadai — ${nama}`} onSuccess={(pin,k) => doSubmit(pin,k)} onCancel={() => setPinOpen(false)} />
       {successData && (
-        <div className="success-overlay" onClick={() => setSuccessData(null)}>
-          <div className="success-modal" onClick={e => e.stopPropagation()}>
-            <div className="check">✅</div>
-            <h3>Gadai Berhasil Disimpan!</h3>
-            <div className="info-grid">
-              {[
-                ['No Faktur', successData.noFaktur],
-                ['Tgl Gadai', successData.tglGadai],
-                ['Jatuh Tempo', successData.tglJT],
-                ['Tgl Sita', successData.tglSita],
-                ['Lokasi Rak', successData.locationGudang || '—'],
-                ['Kasir', successData.kasir],
-              ].map(([label, val]) => (
-                <div className="info-row" key={label}>
-                  <span className="info-label">{label}</span>
-                  <span className="info-val">{val || '—'}</span>
-                </div>
-              ))}
-            </div>
-            <div className="success-actions">
-              <button className="btn btn-primary btn-full" onClick={() => alert('Cetak surat kontrak — akan diimplementasi')}>🖨️ Cetak Surat</button>
-              <button className="btn btn-outline btn-full" onClick={() => setSuccessData(null)}>Tutup</button>
-            </div>
+        <div className="success-overlay" onClick={() => setSuccessData(null)}><div className="success-modal" onClick={e => e.stopPropagation()}>
+          <div className="check">✅</div><h3>Gadai Berhasil Disimpan!</h3>
+          <div className="info-grid">{[['No Faktur',successData.noFaktur],['Tgl Gadai',successData.tglGadai],['Jatuh Tempo',successData.tglJT],['Tgl Sita',successData.tglSita],['Rak',successData.locationGudang||'—'],['Kasir',successData.kasir]].map(([l,v])=><div className="info-row" key={l}><span className="info-label">{l}</span><span className="info-val">{v||'—'}</span></div>)}</div>
+          <div className="success-actions">
+            <button className="btn btn-primary btn-full" onClick={() => printGadai({ ...successData, ujrahNominal: successData.ujrahNominal || ujrahNominal, ujrahPersen: successData.ujrahPersen || ujrahPersen, biayaAdmin: 10000 })}>🖨️ Cetak Surat</button>
+            <button className="btn btn-outline btn-full" onClick={() => setSuccessData(null)}>Tutup</button>
           </div>
-        </div>
+        </div></div>
       )}
     </AppShell>
   );
 }
+function fmtRp(v:number){return 'Rp '+v.toLocaleString('id-ID');}

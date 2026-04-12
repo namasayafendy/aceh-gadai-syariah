@@ -12,6 +12,7 @@ import AppShell from '@/components/ui/AppShell';
 import PinModal from '@/components/ui/PinModal';
 import { useOutletId } from '@/components/auth/AuthProvider';
 import { formatRp, formatMoneyInput, formatMoneyInputSigned, parseMoney, formatDate } from '@/lib/format';
+import { printSJB } from '@/lib/print';
 
 const KATEGORI_SJB = ['HANDPHONE', 'LAPTOP', 'ELEKTRONIK'];
 const GRADE_OPTIONS = [
@@ -460,7 +461,7 @@ export default function SJBPage() {
             <div className="check">✅</div>
             <h3>{akadSuccess ? 'Akad SJB Berhasil!' : `${bbSuccess?.status} Berhasil!`}</h3>
             <div className="success-actions">
-              <button className="btn btn-primary btn-full" onClick={() => alert('Cetak — akan diimplementasi')}>🖨️ Cetak</button>
+              <button className="btn btn-primary btn-full" onClick={() => printSJB({ noSJB: akadSuccess?.noSJB || '', nama, noKtp, telp1, kategori, barang, kelengkapan, grade, imeiSn, hargaJual, hargaBuyback, lamaTitip: parseInt(lamaTitip) || 30, tglJual: akadSuccess?.tglJual || '', tglJT: akadSuccess?.tglJT || '', barcodeA: akadSuccess?.barcodeA || '', barcodeB: akadSuccess?.barcodeB || '', kasir: akadSuccess?.kasir || '', outlet: akadSuccess?.outlet || '', alamat: akadSuccess?.alamat || '', kota: akadSuccess?.kota || '', telpon: akadSuccess?.telpon || '', namaPerusahaan: akadSuccess?.namaPerusahaan || 'PT. ACEH GADAI SYARIAH' })}>🖨️ Cetak</button>
               <button className="btn btn-outline btn-full" onClick={() => { setAkadSuccess(null); setBbSuccess(null); }}>Tutup</button>
             </div>
           </div>
