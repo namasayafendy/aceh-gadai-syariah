@@ -3,7 +3,7 @@
 // ============================================================
 // ACEH GADAI SYARIAH - Sidebar Navigation
 // File: components/ui/Sidebar.tsx
-// Mirroring GAS Index.html sidebar
+// + Outlet selector for OWNER/ADMIN (outlet_id=0)
 // ============================================================
 
 import { usePathname } from 'next/navigation';
@@ -41,15 +41,40 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/backup',    icon: '💾', label: 'Backup & Bon',       section: 'Admin',   roles: ['ADMIN','OWNER'] },
 ];
 
+interface OutletOption {
+  id: number;
+  nama: string;
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, outletId } = useAuth();
+  const { user, outletId, setActiveOutlet, isAdminOrOwner } = useAuth();
   const [saldoCash, setSaldoCash] = useState<number>(0);
   const [saldoBank, setSaldoBank] = useState<number>(0);
   const [clock, setClock] = useState('');
+  const [outletList, setOutletList] = useState<OutletOption[]>([]);
+
+  // Fetch outlet list for OWNER/ADMIN
+  useEffect(() => {
+    if (!isAdminOrOwner || user?.outlet_id !== 0) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/outlet');
+        const json = await res.json();
+        if (json.ok && json.rows) {
+          setOutletList(json.rows.map((r: any) => ({ id: r.id, nama: r.nama })));
+          // Auto-select first outlet if current is 0
+          if (outletId === 0 && json.rows.length > 0) {
+            setActiveOutlet(json.rows[0].id);
+          }
+        }
+      } catch { /* silent */ }
+    })();
+  }, [isAdminOrOwner, user?.outlet_id, outletId, setActiveOutlet]);
 
   // Fetch saldo kas
   useEffect(() => {
+    if (outletId === 0) return; // don't fetch if no outlet selected
     async function fetchSaldo() {
       try {
         const res = await fetch(`/api/kas?outletId=${outletId}`);
@@ -61,7 +86,7 @@ export default function Sidebar() {
       } catch { /* silent */ }
     }
     fetchSaldo();
-    const interval = setInterval(fetchSaldo, 60000); // refresh tiap 1 menit
+    const interval = setInterval(fetchSaldo, 60000);
     return () => clearInterval(interval);
   }, [outletId]);
 
@@ -83,6 +108,11 @@ export default function Sidebar() {
     return userRole && item.roles.includes(userRole);
   });
 
+  // Current outlet name
+  const currentOutletName = outletList.find(o => o.id === outletId)?.nama
+    || user?.outlet_name
+    || (outletId === 0 ? 'Pilih Outlet...' : `Outlet ${outletId}`);
+
   // Group by section
   let lastSection = '';
 
@@ -102,9 +132,28 @@ export default function Sidebar() {
           }} />
           ACEH GADAI
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2, fontFamily: 'var(--mono)' }}>
-          {user?.outlet_name ?? 'Loading...'}
-        </div>
+
+        {/* Outlet Selector (OWNER/ADMIN with outlet_id=0) */}
+        {isAdminOrOwner && user?.outlet_id === 0 && outletList.length > 0 ? (
+          <select
+            value={outletId}
+            onChange={e => setActiveOutlet(parseInt(e.target.value))}
+            style={{
+              width: '100%', marginTop: 6, padding: '5px 8px',
+              background: 'var(--surface2)', border: '1px solid var(--accent)',
+              borderRadius: 6, color: 'var(--accent)', fontSize: 12,
+              fontWeight: 600, fontFamily: 'var(--mono)', cursor: 'pointer',
+            }}
+          >
+            {outletList.map(o => (
+              <option key={o.id} value={o.id}>{o.nama}</option>
+            ))}
+          </select>
+        ) : (
+          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2, fontFamily: 'var(--mono)' }}>
+            {currentOutletName}
+          </div>
+        )}
       </div>
 
       {/* Navigation */}
