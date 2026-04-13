@@ -13,7 +13,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 
 interface Outlet {
   id: number; nama: string; alamat: string; kota: string;
-  telpon: string; waktu_operasional: string; nama_perusahaan: string;
+  telepon: string; waktu_operasional: string; nama_perusahaan: string;
   biaya_admin: number; web_url: string;
 }
 
@@ -97,7 +97,7 @@ export default function OutletSettingsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12 }}>
                 <div><span style={{ color: 'var(--text3)' }}>Alamat</span><br />{o.alamat || '—'}</div>
                 <div><span style={{ color: 'var(--text3)' }}>Kota</span><br />{o.kota || '—'}</div>
-                <div><span style={{ color: 'var(--text3)' }}>Telpon</span><br />{o.telpon || '—'}</div>
+                <div><span style={{ color: 'var(--text3)' }}>Telpon</span><br />{o.telepon || '—'}</div>
                 <div><span style={{ color: 'var(--text3)' }}>Biaya Admin</span><br />Rp {(o.biaya_admin || 10000).toLocaleString('id-ID')}</div>
                 <div style={{ gridColumn: 'span 2' }}><span style={{ color: 'var(--text3)' }}>Waktu Operasional</span><br />{o.waktu_operasional || '—'}</div>
                 <div style={{ gridColumn: 'span 2' }}><span style={{ color: 'var(--text3)' }}>Nama Perusahaan</span><br />{o.nama_perusahaan || '—'}</div>
@@ -116,7 +116,7 @@ export default function OutletSettingsPage() {
               <div className="form-group"><label>Alamat</label><input value={editing.alamat || ''} onChange={e => setEditing({ ...editing, alamat: e.target.value })} /></div>
               <div className="form-row">
                 <div className="form-group"><label>Kota</label><input value={editing.kota || ''} onChange={e => setEditing({ ...editing, kota: e.target.value })} /></div>
-                <div className="form-group"><label>Telpon / WA</label><input value={editing.telpon || ''} onChange={e => setEditing({ ...editing, telpon: e.target.value })} /></div>
+                <div className="form-group"><label>Telpon / WA</label><input value={editing.telepon || ''} onChange={e => setEditing({ ...editing, telepon: e.target.value })} /></div>
               </div>
               <div className="form-group"><label>Waktu Operasional</label><input value={editing.waktu_operasional || ''} onChange={e => setEditing({ ...editing, waktu_operasional: e.target.value })} /></div>
               <div className="form-group"><label>Nama Perusahaan</label><input value={editing.nama_perusahaan || ''} onChange={e => setEditing({ ...editing, nama_perusahaan: e.target.value })} /></div>
