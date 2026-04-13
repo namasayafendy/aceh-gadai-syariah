@@ -167,7 +167,7 @@ export default function JatuhTempoPage() {
                   </td>
                   <td style={{ padding: '8px 10px', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.nama}</td>
                   <td style={{ padding: '8px 10px', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.barang}</td>
-                  <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{formatRp(r.jumlah_gadai || r.harga_jual)}</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{formatRp(r.jumlah_gadai || (r as any).harga_jual)}</td>
                   <td style={{ padding: '8px 10px', fontFamily: 'var(--mono)', fontSize: 11 }}>{formatDate(r.tgl_jt)}</td>
                   <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 700, color: r._jtStatus === 'LEWAT WAKTU' ? 'var(--red)' : r._jtStatus === 'JATUH TEMPO' ? 'var(--warn)' : 'var(--green)' }}>
                     {r._sisaHari < 0 ? `${Math.abs(r._sisaHari)} hr lewat` : r._sisaHari === 0 ? 'HARI INI' : `${r._sisaHari} hari`}
