@@ -670,8 +670,6 @@ export default function TebusPage() {
                   idKehilangan: successData.idKehilangan || '',
                   tanpaSurat: p.tanpaSurat || false,
                   payment: p.payment || 'CASH',
-                  cash: p.cash || 0,
-                  bank: p.bank || 0,
                   kasir: successData.kasir,
                   outlet: successData.outlet || '',
                   alamat: successData.alamat || '',
