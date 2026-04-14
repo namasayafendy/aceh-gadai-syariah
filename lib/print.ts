@@ -540,3 +540,200 @@ export function printSJBTebus(r: SJBTebusPrintData) {
   const needBarcode = kontrakPages.length > 0;
   openPrintWindow(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Nota ${label} ${r.noSJB||r.noFaktur||''}</title>${needBarcode?'<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>':''}<style>${BASE_CSS}</style></head><body><div class="noprint"><button onclick="window.print()" style="padding:6px 16px;margin-right:8px">🖨️ Print</button><button onclick="window.close()" style="padding:6px 12px">✕ Tutup</button>${hasDiskon?'<span style="font-size:11px;margin-left:12px;color:green">✔ Surat Diskon Disertakan</span>':''}${r.tanpaSurat?'<span style="font-size:11px;margin-left:12px;color:#d97706">✔ Surat Kehilangan Disertakan</span>':''}${r.cetakKontrak?'<span style="font-size:11px;margin-left:12px;color:#888">+ Kontrak Perpanjangan (2 lembar)</span>':''}</div>${pages}${kontrakPages}${kontrakBcScript}</body></html>`);
 }
+
+// ════════════════════════════════════════════════════════════
+// CETAK LAPORAN MALAM (Replika printLaporan() dari GAS laporanmalam.html)
+// ════════════════════════════════════════════════════════════
+
+export interface LaporanMalamPrintData {
+  tgl: string;
+  outlet: string;
+  rekap: {
+    gadaiKeluar: number; sjbKeluar: number; totalKeluar: number;
+    tebusMasuk: number; perpanjangMasuk: number;
+    buybackMasuk?: number;
+  };
+  saldo: { cash: number; bank: number; total: number };
+  gadaiList: any[];
+  sjbList: any[];
+  tebusList: any[];
+  buybackList: any[];
+  // Pre-computed laba values from page.tsx
+  labaTebus: number; labaBB: number; labaPjg: number;
+  labaJual: number; labaSita: number; labaTK: number; labaTotal: number;
+  totalMasukAll: number;
+  buybackMasukVal: number;
+  jualMasukVal: number;
+  // Categorized lists
+  tebusOnly: any[];
+  perpanjangList: any[];
+  jualSitaList: any[];
+}
+
+function _hitungLaba(st: string, jb: number, pi: number, _uj: number, gb: number): number {
+  switch (st) {
+    case 'TEBUS': case 'BUYBACK': return jb - pi;
+    case 'PERPANJANG': return jb;
+    case 'TAMBAH': return (gb - jb) - pi;
+    case 'KURANG': return (jb + gb) - pi;
+    default: return jb - pi;
+  }
+}
+
+export function printLaporanMalam(d: LaporanMalamPrintData) {
+  const R = fmtRp;
+  const tglDate = new Date(d.tgl + 'T00:00:00');
+  const tglFmt = tglDate.toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+  const rk = d.rekap;
+
+  // ── Table header 15 cols (cermin GAS TH14) ──
+  const TH14 = '<tr>'
+    + '<th>No</th><th>Tgl Gadai</th><th>Tgl Tebus</th><th>No Faktur</th>'
+    + '<th>Lama</th><th>Nama</th><th>Kategori</th>'
+    + '<th class="num">Taksiran</th><th class="num">Pinjaman</th>'
+    + '<th class="num">Total Sistem</th><th class="num">Jml Bayar</th>'
+    + '<th class="num">Jml Tebus</th>'
+    + '<th>Bayar</th><th>Catatan</th><th class="num">Selisih (Laba)</th>'
+    + '</tr>';
+
+  // ── Print row (cermin GAS pRow) ──
+  function pRow(r: any, idx: number, showAnom: boolean): string {
+    const jb = Number(r.jumlah_bayar || 0), pi = Number(r.jumlah_gadai || r.harga_jual || 0);
+    const gb = Number(r.jumlah_gadai_baru || r.harga_jual_baru || 0);
+    const uj = Number(r.ujrah_berjalan || 0);
+    const tak = Number(r.taksiran || 0);
+    const tot = Number(r.total_tebus_sistem || r.total_sistem || 0);
+    const sel = Number(r.selisih || 0);
+    const hr = Number(r.hari_aktual || 0);
+    const st = (r.status || '').toUpperCase();
+    const nama = r.nama_nasabah || r.nama || '';
+    const nf = r.no_faktur || '';
+    const pay = r.payment || 'CASH';
+    const cat = r.alasan || '';
+    const tanpaSrt = r.tanpa_surat ? String(r.tanpa_surat).includes('TANPA_SURAT') : false;
+    const idD = r.id_diskon || '';
+    const laba = _hitungLaba(st, jb, pi, uj, gb);
+
+    const anoms: string[] = [];
+    if (sel > 1000) anoms.push('DISKON' + (idD ? ' [' + idD + ']' : ''));
+    if (tanpaSrt) anoms.push('TANPA BARCODE');
+    const catStr = anoms.length
+      ? anoms.join(' | ') + (cat ? ' — ' + cat : '')
+      : (cat || '—');
+    const bg = showAnom && anoms.length ? 'background:#fff3cd;font-weight:bold;' : '';
+
+    let jt2: number;
+    if (st === 'TAMBAH') jt2 = gb > 0 ? (gb - jb) : jb;
+    else if (st === 'KURANG') jt2 = gb > 0 ? (jb + gb) : jb;
+    else if (st === 'SITA') jt2 = tak;
+    else jt2 = jb;
+
+    const tglGadai = r.tgl_gadai ? new Date(r.tgl_gadai).toLocaleDateString('id-ID') : '—';
+    const tglTebus = r.tgl ? new Date(r.tgl).toLocaleDateString('id-ID') : '—';
+    const isTK = ['TAMBAH', 'KURANG', 'SITA'].includes(st);
+
+    return '<tr style="' + bg + '">'
+      + '<td>' + (idx + 1) + '</td>'
+      + '<td style="white-space:nowrap">' + tglGadai + '</td>'
+      + '<td style="white-space:nowrap">' + tglTebus + '</td>'
+      + '<td style="font-family:monospace">' + nf + '</td>'
+      + '<td class="num">' + (hr > 0 ? hr + ' hr' : '—') + '</td>'
+      + '<td>' + nama + (r._isBuyback ? ' <small style="color:#d97706">[SJB]</small>' : '')
+      + (showAnom && st && !['TEBUS', 'PERPANJANG'].includes(st) ? ' <small>[' + st + ']</small>' : '') + '</td>'
+      + '<td>' + (r.kategori || '') + '</td>'
+      + '<td class="num">' + R(tak) + '</td>'
+      + '<td class="num">' + R(pi) + '</td>'
+      + '<td class="num" style="color:#666">' + R(tot) + '</td>'
+      + '<td class="num" style="font-weight:bold">' + R(jb) + '</td>'
+      + '<td class="num" style="font-weight:bold;color:' + (isTK ? '#2563eb' : 'inherit') + '">' + R(jt2) + '</td>'
+      + '<td>' + pay + '</td>'
+      + '<td style="font-size:9px">' + catStr + '</td>'
+      + '<td class="num" style="font-weight:bold;color:' + (laba > 0 ? 'green' : laba < 0 ? 'red' : '#666') + '">' + R(laba) + '</td>'
+      + '</tr>';
+  }
+
+  // ── Build HTML (cermin GAS printLaporan) ──
+  const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Laporan ' + d.tgl + '</title>'
+    + '<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:10px;padding:10mm}'
+    + 'table{width:100%;border-collapse:collapse;margin-bottom:10px}'
+    + 'th,td{padding:4px 6px;border:1px solid #ccc;text-align:left;vertical-align:top}'
+    + 'th{background:#f0f0f0;font-weight:bold;font-size:9px}.num{text-align:right}'
+    + 'h2{margin-bottom:4px;font-size:14px}h3{margin:10px 0 4px;font-size:11px}'
+    + '.r{display:flex;gap:8px;margin-bottom:8px}'
+    + '.b{flex:1;border:1px solid #ccc;border-radius:3px;padding:5px}'
+    + '.lbl{font-size:8px;color:#666;margin-bottom:2px}'
+    + '.val{font-size:11px;font-weight:bold}'
+    + '.laba-total{background:#e6f7ee;border:2px solid #22c55e;border-radius:4px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}'
+    + '.noprint{margin-bottom:8px}@media print{.noprint{display:none}}'
+    + '</style></head><body>'
+    + '<div class="noprint"><button onclick="window.print()" style="padding:5px 14px;margin-right:6px">Print</button>'
+    + '<button onclick="window.close()">Tutup</button></div>'
+    // Header
+    + '<h2>LAPORAN HARIAN — ' + d.outlet + '</h2>'
+    + '<p style="margin-bottom:8px;color:#555">' + tglFmt + '</p>'
+    // ── Rekap keluar/masuk ──
+    + '<div class="r">'
+    + '<div class="b"><div class="lbl">Gadai Keluar</div><div class="val" style="color:red">' + R(rk.gadaiKeluar) + '</div><small>' + d.gadaiList.length + ' trx gadai</small></div>'
+    + '<div class="b"><div class="lbl">Akad SJB Keluar</div><div class="val" style="color:#d97706">' + R(rk.sjbKeluar) + '</div><small>' + d.sjbList.length + ' akad SJB</small></div>'
+    + '<div class="b" style="border-left:2px solid #ef4444"><div class="lbl">Total Keluar</div><div class="val" style="color:#dc2626">' + R(rk.totalKeluar) + '</div><small>Gadai + SJB</small></div>'
+    + '<div class="b"><div class="lbl">Tebus Masuk</div><div class="val" style="color:green">' + R(rk.tebusMasuk) + '</div></div>'
+    + '<div class="b"><div class="lbl">Buyback Masuk</div><div class="val" style="color:#0891b2">' + R(d.buybackMasukVal) + '</div></div>'
+    + '<div class="b"><div class="lbl">Perpanjang</div><div class="val" style="color:#6366f1">' + R(rk.perpanjangMasuk) + '</div></div>'
+    + '<div class="b"><div class="lbl">Jual Barang</div><div class="val" style="color:#dc2626">' + R(d.jualMasukVal) + '</div></div>'
+    + '<div class="b" style="border-left:2px solid #22c55e"><div class="lbl">Total Masuk</div><div class="val" style="color:#15803d">' + R(d.totalMasukAll) + '</div></div>'
+    + '</div>'
+    // ── Rekap laba ──
+    + '<div class="r">'
+    + '<div class="b"><div class="lbl">Laba Tebus</div><div class="val" style="color:green">' + R(d.labaTebus) + '</div></div>'
+    + '<div class="b"><div class="lbl">Laba Buyback</div><div class="val" style="color:#0891b2">' + R(d.labaBB) + '</div></div>'
+    + '<div class="b"><div class="lbl">Laba Perpanjang</div><div class="val" style="color:#6366f1">' + R(d.labaPjg) + '</div></div>'
+    + '<div class="b"><div class="lbl">Laba Jual</div><div class="val" style="color:#d97706">' + R(d.labaJual) + '</div></div>'
+    + '<div class="b"><div class="lbl">Laba Sita/T/K</div><div class="val">' + R(d.labaSita + d.labaTK) + '</div></div>'
+    + '</div>'
+    + '<div class="laba-total"><span style="font-weight:bold;font-size:11px">TOTAL LABA HARI INI</span>'
+    + '<span style="font-size:14px;font-weight:900;color:' + (d.labaTotal >= 0 ? '#16a34a' : '#dc2626') + '">' + R(d.labaTotal) + '</span></div>'
+    // ── Ringkasan Akhir ──
+    + '<div style="display:flex;gap:8px;margin:10px 0;padding:10px;background:#f0fdf4;border:2px solid #22c55e;border-radius:6px">'
+    + '<div style="flex:1;text-align:center"><div style="font-size:9px;color:#666;font-weight:bold;text-transform:uppercase">Total Keluar</div><div style="font-size:14px;font-weight:900;color:#dc2626">' + R(rk.totalKeluar) + '</div><small style="color:#666">Gadai + SJB</small></div>'
+    + '<div style="flex:1;text-align:center;border-left:1px solid #22c55e;border-right:1px solid #22c55e"><div style="font-size:9px;color:#666;font-weight:bold;text-transform:uppercase">Total Masuk</div><div style="font-size:14px;font-weight:900;color:#16a34a">' + R(d.totalMasukAll) + '</div><small style="color:#666">Tebus + Buyback + Perpanjang + Jual</small></div>'
+    + '<div style="flex:1;text-align:center"><div style="font-size:9px;color:#666;font-weight:bold;text-transform:uppercase">Total Laba</div><div style="font-size:14px;font-weight:900;color:' + (d.labaTotal >= 0 ? '#16a34a' : '#dc2626') + '">' + R(d.labaTotal) + '</div></div>'
+    + '</div>'
+    // ── Saldo ──
+    + '<div class="r">'
+    + '<div class="b"><div class="lbl">Saldo Cash</div><div class="val">' + R(d.saldo.cash) + '</div></div>'
+    + '<div class="b"><div class="lbl">Saldo Bank</div><div class="val" style="color:blue">' + R(d.saldo.bank) + '</div></div>'
+    + '</div>'
+    // ── Tabel Gadai Baru ──
+    + '<h3>Gadai Baru (' + (d.gadaiList.length + d.sjbList.length) + ' transaksi)</h3>'
+    + '<table><thead><tr><th>No</th><th>No Faktur</th><th>Kategori</th><th>Barang</th>'
+    + '<th class="num">Taksiran</th><th class="num">Total Gadai</th><th>Ket</th><th>Bayar</th></tr></thead><tbody>'
+    + [...d.gadaiList.map((r: any) => ({ ...r, _isSJB: false })), ...d.sjbList.map((r: any) => ({ ...r, _isSJB: true }))].map((r, i) =>
+      '<tr><td>' + (i + 1) + '</td>'
+      + '<td style="font-family:monospace">' + (r.no_faktur || '—') + (r._isSJB ? ' <small style="color:#d97706">[SJB]</small>' : '') + '</td>'
+      + '<td>' + (r.kategori || '—') + '</td>'
+      + '<td>' + (r.barang || '—') + '</td>'
+      + '<td class="num">' + R(r.taksiran || r.harga_jual) + '</td>'
+      + '<td class="num" style="color:red;font-weight:bold">' + R(r.jumlah_gadai || r.harga_jual) + '</td>'
+      + '<td style="font-size:9px">' + (r._isSJB ? 'SJB' : 'GADAI') + '</td>'
+      + '<td>' + (r.payment || 'CASH') + '</td></tr>'
+    ).join('') + '</tbody></table>'
+    // ── Tabel Tebus ──
+    + '<h3>Tebus / Tambah / Kurang (' + d.tebusOnly.length + ' transaksi)</h3>'
+    + '<table><thead>' + TH14 + '</thead><tbody>'
+    + d.tebusOnly.map((r: any, i: number) => pRow(r, i, true)).join('')
+    + '</tbody></table>'
+    // ── Tabel Perpanjang ──
+    + '<h3>Perpanjang (' + d.perpanjangList.length + ' transaksi)</h3>'
+    + '<table><thead>' + TH14 + '</thead><tbody>'
+    + d.perpanjangList.map((r: any, i: number) => pRow(r, i, false)).join('')
+    + '</tbody></table>'
+    // ── Tabel Jual/Sita ──
+    + '<h3>Jual / Sita (' + d.jualSitaList.length + ' transaksi)</h3>'
+    + '<table><thead>' + TH14 + '</thead><tbody>'
+    + d.jualSitaList.map((r: any, i: number) => pRow(r, i, false)).join('')
+    + '</tbody></table>'
+    + '<p style="margin-top:16px;font-size:9px;color:#888">Dicetak: ' + new Date().toLocaleString('id-ID') + '</p>'
+    + '</body></html>';
+
+  openPrintWindow(html);
+}

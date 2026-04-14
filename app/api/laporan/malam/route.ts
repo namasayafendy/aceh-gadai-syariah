@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     // ── Tebus + Buyback ───────────────────────────────────────
     const { data: tebusRaw } = await db
       .from('tb_tebus')
-      .select('id,no_faktur,nama_nasabah,kategori,barang,jumlah_gadai,jumlah_gadai_baru,ujrah_berjalan,jumlah_bayar,selisih,status,payment,kasir,hari_aktual,tanpa_surat')
+      .select('id,tgl,no_faktur,nama_nasabah,kategori,barang,taksiran,jumlah_gadai,jumlah_gadai_baru,ujrah_berjalan,total_tebus_sistem,jumlah_bayar,selisih,id_diskon,status,alasan,payment,kasir,hari_aktual,tanpa_surat')
       .eq('outlet', outletName)
       .gte('tgl', tgl + 'T00:00:00+07:00')
       .lte('tgl', tgl + 'T23:59:59+07:00')
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
 
     const { data: buybackRaw } = await db
       .from('tb_buyback')
-      .select('id,no_faktur,nama,kategori,barang,harga_jual,harga_jual_baru,ujrah_berjalan,jumlah_bayar,selisih,status,payment,kasir,hari_aktual,tanpa_surat')
+      .select('id,tgl,no_faktur,nama,kategori,barang,taksiran,harga_jual,harga_jual_baru,ujrah_berjalan,total_sistem,jumlah_bayar,selisih,id_diskon,status,alasan,payment,kasir,hari_aktual,tanpa_surat')
       .eq('outlet', outletName)
       .gte('tgl', tgl + 'T00:00:00+07:00')
       .lte('tgl', tgl + 'T23:59:59+07:00')

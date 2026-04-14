@@ -12,6 +12,7 @@ import { useState, useCallback } from 'react';
 import AppShell from '@/components/ui/AppShell';
 import { useOutletId } from '@/components/auth/AuthProvider';
 import { todayISO } from '@/lib/format';
+import { printLaporanMalam } from '@/lib/print';
 
 // ── Helpers ──────────────────────────────────────────────────
 function fmtRp(v: number | string) { return 'Rp\u00a0' + (parseFloat(String(v || 0)) || 0).toLocaleString('id-ID'); }
@@ -179,7 +180,20 @@ export default function LaporanPage() {
               <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4, fontWeight: 600 }}>Tanggal</div>
               <input type="date" value={tgl} onChange={e => setTgl(e.target.value)} style={{ fontSize: 12, padding: '7px 10px', width: '100%' }} />
             </div>
-            <button className="btn btn-primary btn-full btn-sm" onClick={loadLaporan}>📊 Tampilkan</button>
+            <button className="btn btn-primary btn-full btn-sm" onClick={loadLaporan}>Tampilkan</button>
+            {data && (
+              <button className="btn btn-outline btn-full btn-sm" style={{ marginTop: 6 }}
+                onClick={() => printLaporanMalam({
+                  tgl, outlet: data.outlet?.nama || '',
+                  rekap: rk, saldo,
+                  gadaiList, sjbList, tebusList, buybackList,
+                  labaTebus, labaBB, labaPjg, labaJual, labaSita, labaTK, labaTotal,
+                  totalMasukAll, buybackMasukVal: buybackMasuk, jualMasukVal: jualMasuk,
+                  tebusOnly, perpanjangList, jualSitaList,
+                })}>
+                Cetak Laporan
+              </button>
+            )}
           </div>
           {data && (
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 14 }}>
