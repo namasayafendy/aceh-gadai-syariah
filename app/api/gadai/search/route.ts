@@ -46,6 +46,11 @@ export async function POST(request: NextRequest) {
 
     const row = allRows[0];
 
+    // ── tanpaSurat detection (cermin GAS getGadaiByBarcode) ──
+    // Jika input bukan barcode_a → nasabah pakai No. SBR (surat hilang)
+    const matchByBarcodeA = String(row.barcode_a || '').toUpperCase() === input;
+    const isTanpaSurat = !matchByBarcodeA;
+
     // Cross-outlet check
     if (myOutletName && row.outlet && row.outlet !== myOutletName) {
       return NextResponse.json({
@@ -65,7 +70,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ ok: true, data: row, source: row._source });
+    return NextResponse.json({ ok: true, data: row, source: row._source, tanpaSurat: isTanpaSurat });
   } catch (err) {
     console.error('[gadai/search]', err);
     return NextResponse.json({ ok: false, msg: 'Server error.' }, { status: 500 });

@@ -174,6 +174,22 @@ export default function TebusPage() {
     // Auto-fill taksiran for JUAL/SITA
     if (tebusStatus === 'JUAL') setTaksiranJualRaw(taksiran > 0 ? taksiran.toLocaleString('id-ID') : '');
     if (tebusStatus === 'SITA') setTaksiranSitaRaw(taksiran > 0 ? taksiran.toLocaleString('id-ID') : '');
+
+    // Auto-fill ujrah baru perpanjang = ujrah lama (bisa diedit kasir)
+    if (tebusStatus === 'PERPANJANG') {
+      let ujrahLama = gadaiData.ujrah_nominal || 0;
+      // Fallback: kalau ujrah_nominal 0 di database, hitung dari formula
+      if (ujrahLama <= 0) {
+        if (emasFlag) {
+          const persen = 2.8;
+          ujrahLama = Math.ceil((persen / 100 / 30) * taksiran * 30 / 1000) * 1000;
+        } else {
+          const persen = jmlGadai <= 3000000 ? 8 : 7;
+          ujrahLama = Math.ceil((persen / 100 / 30) * 5 * taksiran * 6 / 1000) * 1000;
+        }
+      }
+      if (ujrahLama > 0) setUjrahBaruPerpanjangRaw(ujrahLama.toLocaleString('id-ID'));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tebusStatus, gadaiData, jmlGadaiBaru]);
 
@@ -324,6 +340,9 @@ export default function TebusPage() {
           barcodeA: d.barcode_a,
           barcodeB: d.barcode_b,
           jumlahGadaiBaru: jmlGadaiBaru,
+          ujrahBaru: ['TAMBAH','KURANG'].includes(tebusStatus)
+            ? parseMoney(ujrahBaruRaw)
+            : (parseMoney(ujrahBaruPerpanjangRaw) || d.ujrah_nominal || 0),
         },
       });
       resetForm(); loadTodayList();
@@ -644,6 +663,15 @@ export default function TebusPage() {
             <div className="success-actions">
               <button className="btn btn-primary btn-full" onClick={() => {
                 const p = successData._print || {};
+                const st = successData.status;
+                // PERPANJANG: tanya dulu apakah perlu kontrak baru (opsional, hemat kertas)
+                // TAMBAH/KURANG: wajib kontrak baru (jumlah & ujrah berubah)
+                let wantKontrak = false;
+                if (['TAMBAH','KURANG'].includes(st) && successData.tglGadaiBaru) {
+                  wantKontrak = true;
+                } else if (st === 'PERPANJANG' && successData.tglGadaiBaru) {
+                  wantKontrak = confirm('Apakah perlu cetak kontrak baru?\n\n(Tanggal JT & sita sudah diupdate di sistem.\nPilih OK jika nasabah datang langsung.\nPilih Batal jika perpanjang via transfer / HP)');
+                }
                 printTebus({
                   idTebus: successData.idTebus,
                   noFaktur: p.noFaktur || '',
@@ -678,13 +706,14 @@ export default function TebusPage() {
                   namaPerusahaan: successData.namaPerusahaan || 'PT. ACEH GADAI SYARIAH',
                   waktuOperasional: successData.waktuOperasional || '',
                   taksiran: p.taksiran || 0,
-                  cetakKontrak: !!successData.tglGadaiBaru,
+                  cetakKontrak: wantKontrak,
                   barcodeA: p.barcodeA || '',
                   barcodeB: p.barcodeB || '',
                   tglGadaiBaru: successData.tglGadaiBaru || '',
                   tglJTBaru: successData.tglJTBaru || '',
                   tglSitaBaru: successData.tglSitaBaru || '',
                   jumlahGadaiBaru: p.jumlahGadaiBaru || 0,
+                  ujrahBaru: p.ujrahBaru || 0,
                 });
               }}>🖨️ Cetak</button>
               <button className="btn btn-outline btn-full" onClick={() => setSuccessData(null)}>Tutup</button>
