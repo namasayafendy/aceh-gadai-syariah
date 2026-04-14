@@ -1,8 +1,8 @@
 // ============================================================
 // ACEH GADAI SYARIAH - Laporan Harian API
 // File: app/api/laporan/harian/route.ts
-// GET: return gadai, tebus, sjb for a date + saldo kas
-// Used by: Laporan Malam page + Gadai today list
+// GET: return gadai, tebus, sjb, buyback for a date + saldo kas
+// Used by: Dashboard + Laporan Malam page
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -25,11 +25,12 @@ export async function GET(request: NextRequest) {
     const dayStart = tgl + 'T00:00:00';
     const dayEnd = tgl + 'T23:59:59';
 
-    // Gadai for this date
+    // Gadai for this date (exclude BATAL)
     let gadaiQ = db.from('tb_gadai')
       .select('*')
       .gte('tgl_gadai', dayStart)
       .lte('tgl_gadai', dayEnd)
+      .neq('status', 'BATAL')
       .order('tgl_gadai', { ascending: false });
     if (outletFilter) gadaiQ = gadaiQ.eq('outlet', outletFilter);
     const { data: gadai } = await gadaiQ;
@@ -48,9 +49,19 @@ export async function GET(request: NextRequest) {
       .select('*')
       .gte('tgl_gadai', dayStart)
       .lte('tgl_gadai', dayEnd)
+      .neq('status', 'BATAL')
       .order('tgl_gadai', { ascending: false });
     if (outletFilter) sjbQ = sjbQ.eq('outlet', outletFilter);
     const { data: sjb } = await sjbQ;
+
+    // Buyback for this date
+    let buybackQ = db.from('tb_buyback')
+      .select('*')
+      .gte('tgl', dayStart)
+      .lte('tgl', dayEnd)
+      .order('tgl', { ascending: false });
+    if (outletFilter) buybackQ = buybackQ.eq('outlet', outletFilter);
+    const { data: buyback } = await buybackQ;
 
     // Saldo kas (running total of all kas entries for this outlet)
     let kasQ = db.from('tb_kas').select('tipe, tipe_kas, jumlah');
@@ -78,6 +89,7 @@ export async function GET(request: NextRequest) {
       gadai: gadai ?? [],
       tebus: tebus ?? [],
       sjb: sjb ?? [],
+      buyback: buyback ?? [],
       saldoCash,
       saldoBank,
     });

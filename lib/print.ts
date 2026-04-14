@@ -26,7 +26,7 @@ function openPrintWindow(html: string) {
   setTimeout(() => win.print(), 600);
 }
 
-const BASE_CSS = `*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;background:#ccc;padding:10px}.noprint{margin-bottom:10px;background:#fff;padding:8px;border-radius:4px}.page{background:#fff;width:210mm;min-height:297mm;padding:12mm 15mm;margin:0 auto 10px}.page:not(:last-child){page-break-after:always;break-after:page}.page:last-child{page-break-after:avoid;break-after:avoid}.page-a4{background:#fff;width:210mm;min-height:297mm;padding:12mm 15mm;margin:0 auto 10px;page-break-after:always}.page-a4:last-child{page-break-after:avoid}.page-half{background:#fff;width:210mm;min-height:148mm;padding:15mm;margin:0 auto 10px;page-break-after:always}.page-half:last-child{page-break-after:avoid}p{margin-bottom:3px}@media print{body{background:#fff;padding:0}.noprint{display:none}.page,.page-a4,.page-half{margin:0}.page:not(:last-child),.page-a4:not(:last-child),.page-half:not(:last-child){page-break-after:always}.page:last-child,.page-a4:last-child,.page-half:last-child{page-break-after:avoid}}`;
+const BASE_CSS = `*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;background:#ccc;padding:10px}.noprint{margin-bottom:10px;background:#fff;padding:8px;border-radius:4px}.page{background:#fff;width:210mm;min-height:297mm;padding:12mm 15mm;margin:0 auto 10px}.page:not(:last-child){page-break-after:always}.page:last-child{page-break-after:avoid}.page-half{background:#fff;width:210mm;min-height:148mm;padding:15mm;margin:0 auto 10px;page-break-after:always}.page-half:last-child{page-break-after:avoid}p{margin-bottom:3px}@media print{body{background:#fff;padding:0}.noprint{display:none}.page,.page-half{margin:0;padding:12mm 15mm}.page:not(:last-child),.page-half:not(:last-child){page-break-after:always}.page:last-child,.page-half:last-child{page-break-after:avoid}}`;
 
 // ── SHARED ADDENDUM TEXTS ─────────────────────────────────────
 function getAddendumTexts(isEmas: boolean) {
@@ -174,12 +174,12 @@ export function printTebus(r: TebusPrintData) {
   const label = statusLabel[r.status] || r.status;
   const alamatLine = (r.alamat||'') + '. Telepon/Wa: ' + (r.telpon||'');
 
-  function nota(lembar: string) {
-    return `<div class="page-half"><div style="text-align:center;margin-bottom:10px;border-bottom:2px solid #000;padding-bottom:8px"><div style="font-size:14px;font-weight:bold">NOTA PENEBUSAN BARANG</div><div style="font-size:13px;font-weight:bold">${r.namaPerusahaan||'ACEH GADAI SYARIAH'}</div><div style="font-size:9px">Alamat: ${alamatLine}</div></div>`
+  function notaInner(lembar: string) {
+    return `<div style="padding:8mm 0"><div style="text-align:center;margin-bottom:10px;border-bottom:2px solid #000;padding-bottom:8px"><div style="font-size:14px;font-weight:bold">NOTA PENEBUSAN BARANG</div><div style="font-size:13px;font-weight:bold">${r.namaPerusahaan||'ACEH GADAI SYARIAH'}</div><div style="font-size:9px">Alamat: ${alamatLine}</div></div>`
       +`<table style="width:100%;font-size:10px;border-collapse:collapse;margin-bottom:12px"><tbody>`
       +`<tr><td style="padding:3px 6px;width:45%">No Pelunasan</td><td style="padding:3px 6px">: <b>${r.idTebus||''}</b></td></tr>`
       +`<tr><td style="padding:3px 6px">No Faktur (SBR)</td><td style="padding:3px 6px">: ${r.noFaktur||''}</td></tr>`
-      +`<tr><td style="padding:3px 6px">Tanggal Gadai</td><td style="padding:3px 6px">: ${r.tglGadai||''}</td></tr>`
+      +`<tr><td style="padding:3px 6px">Tanggal Gadai</td><td style="padding:3px 6px">: ${fmtTgl(r.tglGadai||'')}</td></tr>`
       +`<tr><td style="padding:3px 6px">Tanggal Pelunasan</td><td style="padding:3px 6px">: ${r.tglTebus||''}</td></tr>`
       +`<tr><td style="padding:3px 6px">Nama Nasabah</td><td style="padding:3px 6px">: <b>${r.namaNasabah||''}</b></td></tr>`
       +`<tr><td style="padding:3px 6px">Barang</td><td style="padding:3px 6px">: ${r.kategori||''} / ${r.barang||''}</td></tr>`
@@ -192,9 +192,9 @@ export function printTebus(r: TebusPrintData) {
       +`<tr><td style="padding:3px 6px">Status</td><td style="padding:3px 6px">: <b>${label}</b></td></tr>`
       +(r.tanpaSurat?`<tr><td style="padding:3px 6px;color:red" colspan="2">⚠️ Transaksi tanpa surat kontrak asli</td></tr>`:'')
       +`</tbody></table>`
-      +`<div style="font-size:9px;font-style:italic;margin-bottom:16px">Barang telah diperiksa dan cocok dengan surat akad ijarah dan telah diserah terimakan kepada nasabah yg diberikan hak dengan baik serta keadaan masih bersegel.</div>`
-      +`<div style="display:flex;margin-top:20px;font-size:10px"><div style="flex:1;text-align:center">Petugas<br><br><br><br><span style="border-top:1px solid #000;padding-top:3px">${r.kasir||''}</span></div><div style="flex:1;text-align:center">Nasabah<br><br><br><br><span style="border-top:1px solid #000;padding-top:3px">${r.namaNasabah||''}</span></div></div>`
-      +`<div style="text-align:right;font-size:9px;margin-top:8px">*) Lembar ${lembar}</div></div>`;
+      +`<div style="font-size:9px;font-style:italic;margin-bottom:10px">Barang telah diperiksa dan cocok dengan surat akad ijarah dan telah diserah terimakan kepada nasabah yg diberikan hak dengan baik serta keadaan masih bersegel.</div>`
+      +`<div style="display:flex;margin-top:12px;font-size:10px"><div style="flex:1;text-align:center">Petugas<br><br><br><span style="border-top:1px solid #000;padding-top:3px">${r.kasir||''}</span></div><div style="flex:1;text-align:center">Nasabah<br><br><br><span style="border-top:1px solid #000;padding-top:3px">${r.namaNasabah||''}</span></div></div>`
+      +`<div style="text-align:right;font-size:9px;margin-top:4px">*) Lembar ${lembar}</div></div>`;
   }
 
   function suratKehilangan() {
@@ -280,7 +280,9 @@ export function printTebus(r: TebusPrintData) {
     kontrakBcMap.push(...kbBcItems);
   }
 
-  const pages = nota('Nasabah') + nota('Perusahaan') + suratKehilangan() + suratDiskon();
+  // Nota: 2 nota (Nasabah + Perusahaan) dalam 1 halaman A4
+  const notaPage = `<div class="page" style="padding:8mm 15mm">${notaInner('Nasabah')}<div style="border-top:1px dashed #999;margin:4mm 0"></div>${notaInner('Perusahaan')}</div>`;
+  const pages = notaPage + suratKehilangan() + suratDiskon();
   const kbBcScript = kontrakBcMap.length > 0
     ? `<script>window.addEventListener('load',function(){${kontrakBcMap.map(b => `try{JsBarcode(document.getElementById("${b.id}"),"${b.val}",{format:"CODE128",width:1.2,height:35,displayValue:false});}catch(e){}`).join('\n')}});<\/script>`
     : '';
@@ -404,7 +406,7 @@ export function printSJBTebus(r: SJBTebusPrintData) {
   const namaDisplay = r.nama || r.namaNasabah || '';
 
   function nota(lembar: string) {
-    return `<div class="page-half"><div style="text-align:center;margin-bottom:10px;border-bottom:2px solid #000;padding-bottom:8px"><div style="font-size:14px;font-weight:bold">NOTA BELI KEMBALI (BUYBACK)</div><div style="font-size:13px;font-weight:bold">${r.namaPerusahaan||'ACEH GADAI SYARIAH'}</div><div style="font-size:9px">Alamat: ${alamatLine}</div></div>`
+    return `<div style="padding:8mm 0"><div style="text-align:center;margin-bottom:10px;border-bottom:2px solid #000;padding-bottom:8px"><div style="font-size:14px;font-weight:bold">NOTA BELI KEMBALI (BUYBACK)</div><div style="font-size:13px;font-weight:bold">${r.namaPerusahaan||'ACEH GADAI SYARIAH'}</div><div style="font-size:9px">Alamat: ${alamatLine}</div></div>`
       +`<table style="width:100%;font-size:10px;border-collapse:collapse;margin-bottom:12px"><tbody>`
       +`<tr><td style="padding:3px 6px;width:45%">No Transaksi</td><td style="padding:3px 6px">: <b>${r.idBB||r.idTebus||''}</b></td></tr>`
       +`<tr><td style="padding:3px 6px">No SJB</td><td style="padding:3px 6px">: ${r.noSJB||r.noFaktur||''}</td></tr>`
@@ -421,9 +423,9 @@ export function printSJBTebus(r: SJBTebusPrintData) {
       +`<tr><td style="padding:3px 6px">Status</td><td style="padding:3px 6px">: <b>${label}</b></td></tr>`
       +(r.tanpaSurat?`<tr><td style="padding:3px 6px;color:red" colspan="2">⚠️ Transaksi tanpa surat SJB asli</td></tr>`:'')
       +`</tbody></table>`
-      +`<div style="font-size:9px;font-style:italic;margin-bottom:16px">Barang telah diperiksa dan cocok dengan surat perjanjian jual titip dan telah diserah terimakan kepada pemilik yang diberikan hak dengan baik.</div>`
-      +`<div style="display:flex;margin-top:20px;font-size:10px"><div style="flex:1;text-align:center">Petugas<br><br><br><br><span style="border-top:1px solid #000;padding-top:3px">${r.kasir||''}</span></div><div style="flex:1;text-align:center">Pemilik<br><br><br><br><span style="border-top:1px solid #000;padding-top:3px">${namaDisplay}</span></div></div>`
-      +`<div style="text-align:right;font-size:9px;margin-top:8px">*) Lembar ${lembar}</div></div>`;
+      +`<div style="font-size:9px;font-style:italic;margin-bottom:10px">Barang telah diperiksa dan cocok dengan surat perjanjian jual titip dan telah diserah terimakan kepada pemilik yang diberikan hak dengan baik.</div>`
+      +`<div style="display:flex;margin-top:12px;font-size:10px"><div style="flex:1;text-align:center">Petugas<br><br><br><span style="border-top:1px solid #000;padding-top:3px">${r.kasir||''}</span></div><div style="flex:1;text-align:center">Pemilik<br><br><br><span style="border-top:1px solid #000;padding-top:3px">${namaDisplay}</span></div></div>`
+      +`<div style="text-align:right;font-size:9px;margin-top:4px">*) Lembar ${lembar}</div></div>`;
   }
 
   function suratDiskon() {
@@ -450,7 +452,8 @@ export function printSJBTebus(r: SJBTebusPrintData) {
       +`<div style="display:flex;font-size:10px"><div style="flex:1;text-align:center"><div style="margin-bottom:55px">${tglKota}</div><div style="margin-bottom:6px">Konsumen</div><div style="border-top:1px solid #000;padding-top:4px">${namaDisplay}</div></div><div style="flex:1;text-align:center"><div style="margin-bottom:55px">&nbsp;</div><div style="margin-bottom:4px">${r.namaPerusahaan||'PT ACEH GADAI SYARIAH'}</div><div style="font-weight:bold">Teller</div><div style="border-top:1px solid #000;padding-top:4px;margin-top:36px">${r.kasir||''}</div></div></div></div>`;
   }
 
-  const pages = nota('Nasabah') + nota('Perusahaan') + suratDiskon();
+  const notaPage = `<div class="page" style="padding:8mm 15mm">${nota('Nasabah')}<div style="border-top:1px dashed #999;margin:4mm 0"></div>${nota('Perusahaan')}</div>`;
+  const pages = notaPage + suratDiskon();
   const hasDiskon = (parseFloat(String(r.selisih||0))) > 9000;
   openPrintWindow(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Nota ${label} ${r.noSJB||r.noFaktur||''}</title><style>${BASE_CSS}</style></head><body><div class="noprint"><button onclick="window.print()" style="padding:6px 16px;margin-right:8px">🖨️ Print</button><button onclick="window.close()" style="padding:6px 12px">✕ Tutup</button>${hasDiskon?'<span style="font-size:11px;margin-left:12px;color:green">✔ Surat Diskon Disertakan</span>':''}</div>${pages}</body></html>`);
 }
