@@ -1,0 +1,3 @@
+ini adalah project memindahkan aplikasi gadai lama saya di GAS ke aplikasi baru dengan supabase+ vercel supaya menjaga nantinya kalau data sudah terlalu banyak aplikasi tidak "lag"
+
+jangan ganti fungsi2 yg tidak besangkutan dengan yg disuruh dan hanya lakukan edit seminimal mungkin dan seperlunya tanpa merusak fungsi2 yg lain dan usahakan selalu cek dengan cara kerja aplikasi lama di GAS karena itu sudah 99% benar cara kerjanya
