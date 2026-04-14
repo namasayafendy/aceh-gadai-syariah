@@ -2,6 +2,7 @@
 // ACEH GADAI SYARIAH - Owner API Routes
 // File: app/api/owner/route.ts
 // OWNER only — multi-action via ?action=xxx
+// Fixed: rak-save with tipe (GADAI/SJB), proper ID
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -14,7 +15,6 @@ export async function GET(request: NextRequest) {
     const action = searchParams.get('action') ?? 'summary';
 
     if (action === 'summary') {
-      // Aggregate stats per outlet
       const { data: outlets } = await db.from('outlets').select('id, nama').order('id');
       const summary: any[] = [];
       for (const o of (outlets ?? [])) {
@@ -39,9 +39,10 @@ export async function GET(request: NextRequest) {
 
     if (action === 'rak') {
       const outletId = searchParams.get('outletId');
-      let q = db.from('tb_rak').select('*').order('outlet_id').order('kategori').order('kode');
+      let q = db.from('tb_rak').select('*').order('outlet_id').order('tipe').order('kategori').order('kode');
       if (outletId && outletId !== '0') q = q.eq('outlet_id', parseInt(outletId));
-      const { data: rows } = await q;
+      const { data: rows, error } = await q;
+      if (error) return NextResponse.json({ ok: true, rows: [] }); // table might not exist yet
       return NextResponse.json({ ok: true, rows: rows ?? [] });
     }
 
@@ -83,17 +84,15 @@ export async function POST(request: NextRequest) {
       if (!nama) return NextResponse.json({ ok: false, msg: 'Nama wajib.' });
 
       if (id) {
-        // Edit existing
         await db.from('karyawan').update({
           nama, username: username || null, pin: kPin || null,
           role: role || 'KASIR', outlet_id: parseInt(outlet_id) || 1,
           status: status || 'AKTIF',
         }).eq('id', id);
       } else {
-        // Add new
-        const { data: newId } = await db.rpc('get_next_id', { p_tipe: 'USR', p_outlet_id: 0 });
+        const newId = 'USR' + Date.now().toString().slice(-6);
         await db.from('karyawan').insert({
-          id: newId as string, nama, username: username || null,
+          id: newId, nama, username: username || null,
           pin: kPin || null, role: role || 'KASIR',
           outlet_id: parseInt(outlet_id) || 1, status: 'AKTIF',
         });
@@ -108,31 +107,40 @@ export async function POST(request: NextRequest) {
 
     // ── Rak: add/edit/delete ──────────────────────────────
     if (action === 'rak-save') {
-      const { id, kode, nama, kategori, keterangan, outlet_id } = body;
+      const { id, kode, nama, kategori, tipe, keterangan, outlet_id } = body;
       if (!kode || !nama) return NextResponse.json({ ok: false, msg: 'Kode dan nama wajib.' });
 
-      const { data: outlet } = await db.from('outlets').select('nama').eq('id', parseInt(outlet_id) || 1).single();
+      const oid = parseInt(outlet_id) || 1;
+      const { data: outlet } = await db.from('outlets').select('nama').eq('id', oid).single();
       const outletName = outlet ? String((outlet as any).nama) : '';
+      const rakTipe = tipe || 'GADAI'; // default GADAI
 
       if (id) {
-        await db.from('tb_rak').update({
-          kode, nama, kategori: kategori || null, keterangan: keterangan || null,
-          outlet_id: parseInt(outlet_id) || 1, outlet: outletName,
-        }).eq('id', id);
-      } else {
-        const { data: rakId } = await db.rpc('get_next_id', { p_tipe: 'RAK', p_outlet_id: parseInt(outlet_id) || 1 });
-        await db.from('tb_rak').insert({
-          id: rakId as string, kode, nama, kategori: kategori || null,
+        // Update existing
+        const { error } = await db.from('tb_rak').update({
+          kode, nama, kategori: kategori || null, tipe: rakTipe,
           keterangan: keterangan || null,
-          outlet_id: parseInt(outlet_id) || 1, outlet: outletName,
+          outlet_id: oid, outlet: outletName,
+          updated_at: new Date().toISOString(),
+        }).eq('id', id);
+        if (error) return NextResponse.json({ ok: false, msg: 'Gagal update: ' + error.message });
+      } else {
+        // Insert new with simple ID
+        const newId = 'RAK-' + Date.now().toString();
+        const { error } = await db.from('tb_rak').insert({
+          id: newId, kode, nama, kategori: kategori || null, tipe: rakTipe,
+          keterangan: keterangan || null,
+          outlet_id: oid, outlet: outletName,
         });
+        if (error) return NextResponse.json({ ok: false, msg: 'Gagal insert: ' + error.message });
       }
       return NextResponse.json({ ok: true });
     }
 
     if (action === 'rak-delete') {
       if (!body.id) return NextResponse.json({ ok: false, msg: 'ID wajib.' });
-      await db.from('tb_rak').delete().eq('id', body.id);
+      const { error } = await db.from('tb_rak').delete().eq('id', body.id);
+      if (error) return NextResponse.json({ ok: false, msg: 'Gagal hapus: ' + error.message });
       return NextResponse.json({ ok: true });
     }
 
@@ -143,7 +151,7 @@ export async function POST(request: NextRequest) {
 
       const { error } = await db.from('outlets').insert({
         nama: nama.toUpperCase(), alamat: alamat || '', kota: kota || '',
-        telpon: telpon || '', waktu_operasional: waktu_operasional || '',
+        telepon: telpon || '', waktu_operasional: waktu_operasional || '',
         nama_perusahaan: nama_perusahaan || 'PT. ACEH GADAI SYARIAH',
         biaya_admin: 10000,
       });

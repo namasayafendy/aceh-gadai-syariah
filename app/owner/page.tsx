@@ -275,21 +275,22 @@ function RakTab({ requestPin }: { requestPin: (a: string, fn: (pin: string) => v
           <select value={filterOutlet} onChange={e => setFilterOutlet(e.target.value)} style={{ padding: '6px 10px', fontSize: 12 }}>
             <option value="0">Semua Outlet</option><option value="1">Outlet 1</option><option value="2">Outlet 2</option>
           </select>
-          <button className="btn btn-primary btn-sm" onClick={() => setEditing({ kode: '', nama: '', kategori: '', keterangan: '', outlet_id: 1 })}>+ Tambah Rak</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setEditing({ kode: '', nama: '', kategori: '', tipe: 'GADAI', keterangan: '', outlet_id: 1 })}>+ Tambah Rak</button>
         </div>
       </div>
 
       <div className="tbl-wrap">
         <table>
-          <thead><tr><th>Kode</th><th>Nama</th><th>Kategori</th><th>Keterangan</th><th>Outlet</th><th></th></tr></thead>
+          <thead><tr><th>Kode</th><th>Nama</th><th>Kategori</th><th>Tipe</th><th>Keterangan</th><th>Outlet</th><th></th></tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={6} className="empty-state">⏳</td></tr>
-            : rows.length === 0 ? <tr><td colSpan={6} className="empty-state">Belum ada rak</td></tr>
+            {loading ? <tr><td colSpan={7} className="empty-state">⏳</td></tr>
+            : rows.length === 0 ? <tr><td colSpan={7} className="empty-state">Belum ada rak</td></tr>
             : rows.map((r: any) => (
               <tr key={r.id}>
                 <td style={{ fontWeight: 700, fontFamily: 'var(--mono)' }}>{r.kode}</td>
                 <td>{r.nama}</td>
                 <td>{r.kategori || '—'}</td>
+                  <td><span className={`badge ${(r.tipe||'GADAI').toLowerCase()}`}>{r.tipe || 'GADAI'}</span></td>
                 <td>{r.keterangan || '—'}</td>
                 <td>{r.outlet || `Outlet ${r.outlet_id}`}</td>
                 <td style={{ display: 'flex', gap: 4 }}>
@@ -311,6 +312,11 @@ function RakTab({ requestPin }: { requestPin: (a: string, fn: (pin: string) => v
             <div className="form-group"><label>Kategori (auto-assign)</label>
               <select value={editing.kategori || ''} onChange={e => setEditing({ ...editing, kategori: e.target.value })}>
                 <option value="">Semua</option><option>HANDPHONE</option><option>LAPTOP</option><option>ELEKTRONIK</option><option>EMAS</option><option>EMAS PAUN</option>
+              </select>
+            </div>
+            <div className="form-group"><label>Tipe *</label>
+              <select value={editing.tipe || 'GADAI'} onChange={e => setEditing({ ...editing, tipe: e.target.value })}>
+                <option value="GADAI">GADAI</option><option value="SJB">SJB</option>
               </select>
             </div>
             <div className="form-group"><label>Outlet ID *</label><input type="number" value={editing.outlet_id || 1} min={1} onChange={e => setEditing({ ...editing, outlet_id: parseInt(e.target.value) || 1 })} /></div>

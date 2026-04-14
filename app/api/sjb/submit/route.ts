@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
 
     // ── 6. Cari rak ───────────────────────────────────────────
     const { data: rak } = await db.rpc('get_assigned_rak', {
-      p_kategori: body.kategori, p_outlet_id: outletId,
+      p_kategori: body.kategori, p_outlet_id: outletId, p_tipe: 'SJB',
     });
     const assignedRak = (rak as string) ?? '';
 

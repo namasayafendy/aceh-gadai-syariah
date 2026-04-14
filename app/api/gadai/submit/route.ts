@@ -115,6 +115,7 @@ export async function POST(request: NextRequest) {
     const { data: rak } = await db.rpc('get_assigned_rak', {
       p_kategori:  body.kategori,
       p_outlet_id: outletId,
+      p_tipe: 'GADAI',
     });
     const assignedRak = (rak as string) ?? '';
 
