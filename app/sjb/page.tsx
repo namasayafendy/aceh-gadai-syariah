@@ -12,7 +12,7 @@ import AppShell from '@/components/ui/AppShell';
 import PinModal from '@/components/ui/PinModal';
 import { useOutletId } from '@/components/auth/AuthProvider';
 import { formatRp, formatMoneyInput, formatMoneyInputSigned, parseMoney, formatDate } from '@/lib/format';
-import { printSJB } from '@/lib/print';
+import { printSJB, printSJBTebus } from '@/lib/print';
 
 const KATEGORI_SJB = ['HANDPHONE', 'LAPTOP', 'ELEKTRONIK'];
 const GRADE_OPTIONS = [
@@ -248,7 +248,20 @@ export default function SJBPage() {
       });
       const json = await res.json();
       if (!json.ok) { setBbError(json.msg || 'Gagal submit'); setBbSubmitting(false); return; }
-      setBbSuccess({ ...json, kasir: kasirName, status: bbStatus });
+      // Simpan semua data SJB dari bbData untuk cetak nota SEBELUM reset
+      setBbSuccess({
+        ...json, kasir: kasirName, status: bbStatus,
+        // Data kontrak SJB dari bbData (akan di-reset setelah ini)
+        _noSJB: bbData.no_faktur, _nama: bbData.nama, _noKtp: bbData.no_ktp || '',
+        _telp1: bbData.telp1 || '', _kategori: bbData.kategori, _barang: bbData.barang,
+        _kelengkapan: bbData.kelengkapan || '', _grade: bbData.grade || '', _imeiSn: bbData.imei_sn || '',
+        _hargaJual: bbData.harga_jual || 0, _hargaBuyback: bbData.harga_buyback || 0,
+        _lamaTitip: bbData.lama_titip || 30,
+        _locationGudang: bbData.rak || '', _barcodeA: bbData.barcode_a || '', _barcodeB: bbData.barcode_b || bbData.no_faktur || '',
+        _tglJual: bbData.tgl_gadai || '',
+        _totalSistem: bbTotalSistem, _jumlahBayar: jmlBayar, _alasan: bbAlasan.trim(),
+        _hariAktual: 0,
+      });
       setBbBarcode(''); setBbData(null); setBbStatus(''); setBbJmlBayarRaw(''); setBbAlasan(''); setBbTanpaSurat(false);
     } catch (e) { setBbError('Server error: ' + (e as Error).message); }
     setBbSubmitting(false);
@@ -557,10 +570,72 @@ export default function SJBPage() {
             <h3>{bbSuccess.status} Berhasil!</h3>
             <div className="success-actions">
               <button className="btn btn-primary btn-full" onClick={() => {
-                // TODO: implement printSJBTebus for buyback nota
-                // For now, close the modal
-                setBbSuccess(null);
-              }}>Tutup</button>
+                const selisih = Math.max(0, (bbSuccess._totalSistem || 0) - (bbSuccess._jumlahBayar || 0));
+                printSJBTebus({
+                  idBB: bbSuccess.idBB || '', noSJB: bbSuccess.noSJB || bbSuccess._noSJB || '',
+                  status: bbSuccess.status || '',
+                  tglJual: bbSuccess._tglJual || '', tglBB: bbSuccess.tglBB || '',
+                  nama: bbSuccess._nama || bbSuccess.namaNasabah || '',
+                  noKtp: bbSuccess._noKtp || '', telp1: bbSuccess._telp1 || '',
+                  kategori: bbSuccess._kategori || '', barang: bbSuccess._barang || '',
+                  hargaJual: bbSuccess._hargaJual || 0,
+                  hariAktual: bbSuccess._hariAktual || 0,
+                  ujrahBerjalan: bbSuccess._totalSistem || 0,
+                  totalSistem: bbSuccess._totalSistem || 0,
+                  jumlahBayar: bbSuccess._jumlahBayar || 0,
+                  selisih: selisih,
+                  alasan: bbSuccess._alasan || '',
+                  idDiskon: bbSuccess.idDiskon || '',
+                  tanpaSurat: bbSuccess.tanpaSurat || false,
+                  idKehilangan: bbSuccess.idKehilangan || '',
+                  locationGudang: bbSuccess._locationGudang || '',
+                  kasir: bbSuccess.kasir || '',
+                  outlet: bbSuccess.outlet || '',
+                  alamat: bbSuccess.alamat || '',
+                  kota: bbSuccess.kota || '',
+                  telpon: bbSuccess.telpon || '',
+                  namaPerusahaan: bbSuccess.namaPerusahaan || 'PT. ACEH GADAI SYARIAH',
+                  waktuOperasional: bbSuccess.waktuOperasional || '',
+                  // Kontrak baru untuk PERPANJANG
+                  cetakKontrak: bbSuccess.cetakKontrak || false,
+                  tglJualBaru: bbSuccess.tglJualBaru || bbSuccess.tglJualBaru || '',
+                  tglJTBaru: bbSuccess.tglJTBaru || '',
+                  tglSitaBaru: bbSuccess.tglSitaBaru || '',
+                  barcodeA: bbSuccess._barcodeA || '',
+                  barcodeB: bbSuccess._barcodeB || '',
+                  kelengkapan: bbSuccess._kelengkapan || '',
+                  grade: bbSuccess._grade || '',
+                  imeiSn: bbSuccess._imeiSn || '',
+                  hargaBuyback: bbSuccess._hargaBuyback || 0,
+                  lamaTitip: bbSuccess._lamaTitip || 30,
+                });
+              }}>🖨️ Cetak Nota</button>
+              {bbSuccess.status === 'PERPANJANG' && (
+                <button className="btn btn-outline btn-full" onClick={() => {
+                  // Cetak kontrak baru saja (tanpa nota)
+                  printSJB({
+                    noSJB: bbSuccess._noSJB || bbSuccess.noSJB || '',
+                    nama: bbSuccess._nama || '', noKtp: bbSuccess._noKtp || '',
+                    telp1: bbSuccess._telp1 || '',
+                    kategori: bbSuccess._kategori || '', barang: bbSuccess._barang || '',
+                    kelengkapan: bbSuccess._kelengkapan || '', grade: bbSuccess._grade || '',
+                    imeiSn: bbSuccess._imeiSn || '',
+                    hargaJual: bbSuccess._hargaJual || 0,
+                    hargaBuyback: bbSuccess._hargaBuyback || 0,
+                    lamaTitip: bbSuccess._lamaTitip || 30,
+                    tglJual: bbSuccess.tglJualBaru || '',
+                    tglJT: bbSuccess.tglJTBaru || '',
+                    locationGudang: bbSuccess._locationGudang || '',
+                    barcodeA: bbSuccess._barcodeA || '', barcodeB: bbSuccess._barcodeB || '',
+                    kasir: bbSuccess.kasir || '', outlet: bbSuccess.outlet || '',
+                    alamat: bbSuccess.alamat || '', kota: bbSuccess.kota || '',
+                    telpon: bbSuccess.telpon || '',
+                    namaPerusahaan: bbSuccess.namaPerusahaan || 'PT. ACEH GADAI SYARIAH',
+                    waktuOperasional: bbSuccess.waktuOperasional || '',
+                  });
+                }}>📄 Cetak Kontrak Baru</button>
+              )}
+              <button className="btn btn-outline btn-full" onClick={() => setBbSuccess(null)}>Tutup</button>
             </div>
           </div>
         </div>

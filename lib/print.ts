@@ -390,13 +390,20 @@ export function printSJB(r: SJBPrintData) {
 export interface SJBTebusPrintData {
   idBB?: string; idTebus?: string; noSJB?: string; noFaktur?: string;
   status: string; tglJual?: string; tglGadai?: string; tglBB?: string; tglTebus?: string;
-  nama?: string; namaNasabah?: string;
+  nama?: string; namaNasabah?: string; noKtp?: string; telp1?: string;
   kategori: string; barang: string; hargaJual: number;
   hariAktual?: number; ujrahBerjalan?: number; totalSistem?: number;
   jumlahBayar: number; selisih?: number; alasan?: string;
-  idDiskon?: string; tanpaSurat?: boolean;
+  idDiskon?: string; tanpaSurat?: boolean; idKehilangan?: string;
+  locationGudang?: string;
   kasir: string; outlet: string; alamat: string; kota: string; telpon: string;
-  namaPerusahaan: string;
+  namaPerusahaan: string; waktuOperasional?: string;
+  // Untuk cetak kontrak baru (PERPANJANG)
+  cetakKontrak?: boolean;
+  tglJualBaru?: string; tglJTBaru?: string; tglSitaBaru?: string;
+  barcodeA?: string; barcodeB?: string;
+  kelengkapan?: string; grade?: string; imeiSn?: string;
+  hargaBuyback?: number; lamaTitip?: number;
 }
 
 export function printSJBTebus(r: SJBTebusPrintData) {
@@ -414,6 +421,7 @@ export function printSJBTebus(r: SJBTebusPrintData) {
       +`<tr><td style="padding:3px 6px">Tanggal Beli Kembali</td><td style="padding:3px 6px">: ${r.tglBB||r.tglTebus||''}</td></tr>`
       +`<tr><td style="padding:3px 6px">Nama Pemilik</td><td style="padding:3px 6px">: <b>${namaDisplay}</b></td></tr>`
       +`<tr><td style="padding:3px 6px">Barang</td><td style="padding:3px 6px">: ${r.kategori||''} / ${r.barang||''}</td></tr>`
+      +(r.locationGudang?`<tr><td style="padding:3px 6px;font-weight:bold">Lokasi Rak</td><td style="padding:3px 6px;font-weight:bold">: ${r.locationGudang}</td></tr>`:'')
       +`<tr><td style="padding:3px 6px">Harga Jual (dulu)</td><td style="padding:3px 6px">: ${fmtRp(r.hargaJual)}</td></tr>`
       +`<tr><td style="padding:3px 6px">Lama Titip</td><td style="padding:3px 6px">: ${r.hariAktual||'-'} hari</td></tr>`
       +`<tr><td style="padding:3px 6px">Total Sistem</td><td style="padding:3px 6px">: ${fmtRp(r.ujrahBerjalan||r.totalSistem||0)}</td></tr>`
@@ -426,6 +434,23 @@ export function printSJBTebus(r: SJBTebusPrintData) {
       +`<div style="font-size:9px;font-style:italic;margin-bottom:10px">Barang telah diperiksa dan cocok dengan surat perjanjian jual titip dan telah diserah terimakan kepada pemilik yang diberikan hak dengan baik.</div>`
       +`<div style="display:flex;margin-top:12px;font-size:10px"><div style="flex:1;text-align:center">Petugas<br><br><br><span style="border-top:1px solid #000;padding-top:3px">${r.kasir||''}</span></div><div style="flex:1;text-align:center">Pemilik<br><br><br><span style="border-top:1px solid #000;padding-top:3px">${namaDisplay}</span></div></div>`
       +`<div style="text-align:right;font-size:9px;margin-top:4px">*) Lembar ${lembar}</div></div>`;
+  }
+
+  // Surat kehilangan SJB (tanpa surat) — sesuai GAS
+  function suratKehilangan() {
+    if (!r.tanpaSurat) return '';
+    const noKHL = r.idKehilangan ? 'No. '+r.idKehilangan : '';
+    return `<div class="page"><div style="display:flex;justify-content:flex-end;margin-bottom:4px"><span style="font-size:10px;font-family:monospace">${noKHL}</span></div>`
+      +`<div style="text-align:center;font-size:15px;font-weight:bold;margin:10px 0 16px">SURAT PERNYATAAN KEHILANGAN SURAT JUAL TITIP</div>`
+      +`<p style="font-size:10px;margin-bottom:12px">Saya yang bertanda tangan di bawah ini :</p>`
+      +`<table style="font-size:10px;border-collapse:collapse;margin-bottom:16px;width:100%"><tbody><tr><td style="padding:3px 0;width:120px">Nama</td><td style="padding:3px 0">: <b>${namaDisplay}</b></td></tr><tr><td style="padding:3px 0">NIK</td><td style="padding:3px 0">: ${r.noKtp||''}</td></tr><tr><td style="padding:3px 0">Nomor HP</td><td style="padding:3px 0">: ${r.telp1||''}</td></tr></tbody></table>`
+      +`<p style="font-size:10px;margin-bottom:8px">Dengan ini menyatakan bahwa saya adalah pemilik sah atas barang jual titip dengan rincian sebagai berikut:</p>`
+      +`<table style="font-size:10px;border-collapse:collapse;margin-bottom:16px"><tbody><tr><td style="padding:2px 0;width:220px">- Nomor SJB</td><td style="padding:2px 0">: ${r.noSJB||r.noFaktur||''}</td></tr><tr><td style="padding:2px 0">- Tanggal Jual Titip</td><td style="padding:2px 0">: ${r.tglJual||r.tglGadai||'-'}</td></tr><tr><td style="padding:2px 0">- Jenis Barang</td><td style="padding:2px 0">: ${r.kategori||''} / ${r.barang||''}</td></tr><tr><td style="padding:2px 0">- Harga Jual</td><td style="padding:2px 0">: ${fmtRp(r.hargaJual)}</td></tr><tr><td style="padding:2px 0">BELI KEMBALI</td><td style="padding:2px 0">: ${fmtRp(r.jumlahBayar)}</td></tr></tbody></table>`
+      +`<p style="font-size:10px;margin-bottom:16px">Namun, pada saat ini saya kehilangan / tidak membawa surat jual titip (SJB) asli yang diterbitkan oleh PT Aceh Gadai Syariah sehingga saya tidak dapat menyerahkannya saat melakukan beli kembali barang.</p>`
+      +`<p style="font-size:10px;margin-bottom:8px">Saya menyatakan bahwa:</p>`
+      +`<div style="font-size:10px;margin-bottom:16px"><p style="margin-bottom:4px">1. Saya benar-benar pemilik sah dari barang tersebut dan merupakan pihak yang menitipkannya untuk dijual.</p><p style="margin-bottom:4px">2. Saya bersedia membeli kembali barang sesuai dengan ketentuan yang berlaku.</p><p style="margin-bottom:4px">3. Saya bertanggung jawab penuh apabila di kemudian hari timbul permasalahan hukum terkait dengan barang ini.</p><p style="margin-bottom:4px">4. Saya membebaskan PT ACEH GADAI SYARIAH dari segala bentuk tuntutan pihak ketiga atas penyerahan barang ini kepada saya.</p><p style="margin-bottom:4px">5. Apabila di kemudian hari terbukti bahwa pernyataan ini tidak benar, saya bersedia dituntut sesuai dengan hukum yang berlaku di Republik Indonesia.</p></div>`
+      +`<p style="font-size:10px;margin-bottom:20px">Demikian surat pernyataan ini saya buat dengan sebenarnya, dalam keadaan sadar, tanpa tekanan dari pihak manapun.</p>`
+      +`<div style="display:flex;margin-top:30px;font-size:10px"><div style="flex:1">Yang membuat pernyataan :<br><br><br><br><br><span style="border-top:1px solid #000;padding-top:3px">${namaDisplay}</span></div><div style="flex:1;text-align:center">disetujui oleh:<br><br><div style="font-weight:bold;font-size:12px">ACEH GADAI SYARIAH</div><br><span style="border-top:1px solid #000;padding-top:3px">${r.kasir||''}</span></div></div></div>`;
   }
 
   function suratDiskon() {
@@ -452,8 +477,66 @@ export function printSJBTebus(r: SJBTebusPrintData) {
       +`<div style="display:flex;font-size:10px"><div style="flex:1;text-align:center"><div style="margin-bottom:55px">${tglKota}</div><div style="margin-bottom:6px">Konsumen</div><div style="border-top:1px solid #000;padding-top:4px">${namaDisplay}</div></div><div style="flex:1;text-align:center"><div style="margin-bottom:55px">&nbsp;</div><div style="margin-bottom:4px">${r.namaPerusahaan||'PT ACEH GADAI SYARIAH'}</div><div style="font-weight:bold">Teller</div><div style="border-top:1px solid #000;padding-top:4px;margin-top:36px">${r.kasir||''}</div></div></div></div>`;
   }
 
+  // Kontrak baru SJB untuk PERPANJANG — reuse printSJB layout via buildSJBPages
+  // Mirip gadai yang reuse buildGadaiPages untuk kontrak baru
+  let kontrakPages = '';
+  let kontrakBcScript = '';
+  if (r.cetakKontrak && r.barcodeA) {
+    // Build kontrak SJB baru menggunakan printSJB-style pages
+    const _bcMap: {id:string;val:string}[] = [];
+    const bcA = String(r.barcodeA || '');
+    const bcB = String(r.barcodeB || r.noSJB || r.noFaktur || '');
+    const tglFmt = r.tglJualBaru || r.tglBB || r.tglTebus || '';
+    const tglJTFmt = r.tglJTBaru || '';
+    const namaP = r.namaPerusahaan || 'PT. ACEH GADAI SYARIAH';
+
+    function kontrakPage(bcVal: string, isPerusahaan: boolean) {
+      const lembar = isPerusahaan ? 'Lembar Perusahaan (Barcode B)' : 'Lembar Konsumen (Barcode A)';
+      const bcId = 'sjbk_bc_' + _bcMap.length;
+      _bcMap.push({ id: bcId, val: bcVal });
+      return `<div class="page">
+        <div style="text-align:center;margin-bottom:12px;border-bottom:2px solid #000;padding-bottom:8px">
+          <div style="font-size:15px;font-weight:bold">${namaP}</div>
+          <div style="font-size:9px">${r.alamat||''}</div>
+          <div style="font-size:11px;font-weight:bold;margin-top:6px">SURAT PERJANJIAN JUAL DAN BELI KEMBALI</div>
+          <div style="font-size:10px;margin-top:2px">No: ${r.noSJB||r.noFaktur||''}</div>
+        </div>
+        <table style="width:100%;font-size:10px;border-collapse:collapse;margin-bottom:10px"><tbody>
+          <tr><td style="padding:2px 6px;width:140px">Tanggal Akad</td><td style="padding:2px 6px">: ${tglFmt}</td></tr>
+          <tr><td style="padding:2px 6px">Jatuh Tempo</td><td style="padding:2px 6px;font-weight:bold;color:#d97706">: ${tglJTFmt}</td></tr>
+          <tr><td style="padding:2px 6px">Nama Pemilik</td><td style="padding:2px 6px">: <b>${namaDisplay}</b></td></tr>
+          <tr><td style="padding:2px 6px">NIK</td><td style="padding:2px 6px">: ${r.noKtp||''}</td></tr>
+          <tr><td style="padding:2px 6px">No. HP</td><td style="padding:2px 6px">: ${r.telp1||''}</td></tr>
+          <tr><td style="padding:2px 6px">Kategori</td><td style="padding:2px 6px">: ${r.kategori||''}</td></tr>
+          <tr><td style="padding:2px 6px">Barang</td><td style="padding:2px 6px">: ${r.barang||''}</td></tr>
+          <tr><td style="padding:2px 6px">Grade</td><td style="padding:2px 6px">: ${r.grade||''}</td></tr>
+          <tr><td style="padding:2px 6px">IMEI/SN</td><td style="padding:2px 6px">: ${r.imeiSn||''}</td></tr>
+          <tr><td style="padding:2px 6px">Kelengkapan</td><td style="padding:2px 6px">: ${r.kelengkapan||''}</td></tr>
+          <tr><td style="padding:2px 6px">Harga Jual Titip</td><td style="padding:2px 6px;font-weight:bold">: ${fmtRp(r.hargaJual)}</td></tr>
+          <tr><td style="padding:2px 6px">Harga Buyback</td><td style="padding:2px 6px;font-weight:bold;color:#ef4444">: ${fmtRp(r.hargaBuyback||0)}</td></tr>
+          <tr><td style="padding:2px 6px">Lama Titip</td><td style="padding:2px 6px">: ${r.lamaTitip||30} hari</td></tr>
+          <tr><td style="padding:2px 6px">Lokasi Rak</td><td style="padding:2px 6px;font-weight:bold">: ${r.locationGudang||''}</td></tr>
+          <tr><td style="padding:2px 6px">Kasir</td><td style="padding:2px 6px">: ${r.kasir||''}</td></tr>
+        </tbody></table>
+        <div style="text-align:center;margin:12px 0"><svg id="${bcId}"></svg></div>
+        <p style="font-size:9px;margin-bottom:10px;font-style:italic">* KONTRAK PERPANJANGAN — Kontrak ini menggantikan kontrak sebelumnya dengan tanggal jatuh tempo baru.</p>
+        <div style="display:flex;margin-top:12px;font-size:10px">
+          <div style="flex:1;text-align:center"><b>PIHAK PERTAMA</b><br><br><br><br><b>${namaDisplay}</b></div>
+          <div style="flex:1;text-align:center"><b>PIHAK KEDUA</b><br><br><br><br><b>${r.kasir||''}</b><div style="font-size:9px;color:#555">${namaP}</div></div>
+        </div>
+        <div style="text-align:right;font-size:9px;margin-top:8px;color:#999">${lembar}</div>
+      </div>`;
+    }
+
+    kontrakPages = kontrakPage(bcA, false) + kontrakPage(bcB, true);
+    kontrakBcScript = _bcMap.length > 0
+      ? `<script>window.addEventListener('load',function(){${_bcMap.map(b => `try{JsBarcode(document.getElementById("${b.id}"),"${b.val}",{format:"CODE128",width:1.2,height:35,displayValue:false});}catch(e){}`).join('\n')}});<\/script>`
+      : '';
+  }
+
   const notaPage = `<div class="page" style="padding:8mm 15mm">${nota('Nasabah')}<div style="border-top:1px dashed #999;margin:4mm 0"></div>${nota('Perusahaan')}</div>`;
-  const pages = notaPage + suratDiskon();
+  const pages = notaPage + suratKehilangan() + suratDiskon();
   const hasDiskon = (parseFloat(String(r.selisih||0))) > 9000;
-  openPrintWindow(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Nota ${label} ${r.noSJB||r.noFaktur||''}</title><style>${BASE_CSS}</style></head><body><div class="noprint"><button onclick="window.print()" style="padding:6px 16px;margin-right:8px">🖨️ Print</button><button onclick="window.close()" style="padding:6px 12px">✕ Tutup</button>${hasDiskon?'<span style="font-size:11px;margin-left:12px;color:green">✔ Surat Diskon Disertakan</span>':''}</div>${pages}</body></html>`);
+  const needBarcode = kontrakPages.length > 0;
+  openPrintWindow(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Nota ${label} ${r.noSJB||r.noFaktur||''}</title>${needBarcode?'<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>':''}<style>${BASE_CSS}</style></head><body><div class="noprint"><button onclick="window.print()" style="padding:6px 16px;margin-right:8px">🖨️ Print</button><button onclick="window.close()" style="padding:6px 12px">✕ Tutup</button>${hasDiskon?'<span style="font-size:11px;margin-left:12px;color:green">✔ Surat Diskon Disertakan</span>':''}${r.tanpaSurat?'<span style="font-size:11px;margin-left:12px;color:#d97706">✔ Surat Kehilangan Disertakan</span>':''}${r.cetakKontrak?'<span style="font-size:11px;margin-left:12px;color:#888">+ Kontrak Perpanjangan (2 lembar)</span>':''}</div>${pages}${kontrakPages}${kontrakBcScript}</body></html>`);
 }
