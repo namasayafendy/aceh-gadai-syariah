@@ -159,7 +159,9 @@ export async function POST(request: NextRequest) {
     if (body.status === 'PERPANJANG') {
       const tglJTNew   = new Date(now); tglJTNew.setDate(tglJTNew.getDate() + 30);
       const tglSitaNew = new Date(now); tglSitaNew.setDate(tglSitaNew.getDate() + 60);
+      // Persis seperti GAS _updateGadaiTanggal: RESET status ke AKTIF
       await db.from('tb_gadai').update({
+        status:    'AKTIF',             // ← reset ke AKTIF (sesuai GAS)
         tgl_gadai: now.toISOString(),
         tgl_jt:    tglJTNew.toISOString(),
         tgl_sita:  tglSitaNew.toISOString(),
