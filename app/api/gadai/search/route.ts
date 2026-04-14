@@ -60,9 +60,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Status check - only block truly finished statuses
+    // includeAll=true → skip status check (dipakai oleh halaman Edit Transaksi)
+    const includeAll = body.includeAll === true;
     const status = String(row.status ?? '').toUpperCase();
     const statusSelesai = ['TEBUS', 'BATAL', 'SITA', 'JUAL', 'BUYBACK'];
-    if (status && statusSelesai.includes(status)) {
+    if (!includeAll && status && statusSelesai.includes(status)) {
       return NextResponse.json({
         ok: false,
         msg: `Kontrak ini sudah berstatus ${status} — tidak bisa diproses lagi.`,
