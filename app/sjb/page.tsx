@@ -598,18 +598,8 @@ export default function SJBPage() {
                   telpon: bbSuccess.telpon || '',
                   namaPerusahaan: bbSuccess.namaPerusahaan || 'PT. ACEH GADAI SYARIAH',
                   waktuOperasional: bbSuccess.waktuOperasional || '',
-                  // Kontrak baru untuk PERPANJANG
-                  cetakKontrak: bbSuccess.cetakKontrak || false,
-                  tglJualBaru: bbSuccess.tglJualBaru || bbSuccess.tglJualBaru || '',
-                  tglJTBaru: bbSuccess.tglJTBaru || '',
-                  tglSitaBaru: bbSuccess.tglSitaBaru || '',
-                  barcodeA: bbSuccess._barcodeA || '',
-                  barcodeB: bbSuccess._barcodeB || '',
-                  kelengkapan: bbSuccess._kelengkapan || '',
-                  grade: bbSuccess._grade || '',
-                  imeiSn: bbSuccess._imeiSn || '',
-                  hargaBuyback: bbSuccess._hargaBuyback || 0,
-                  lamaTitip: bbSuccess._lamaTitip || 30,
+                  // Cetak Nota = HANYA nota + surat diskon + surat kehilangan, TANPA kontrak baru
+                  cetakKontrak: false,
                 });
               }}>🖨️ Cetak Nota</button>
               {bbSuccess.status === 'PERPANJANG' && (
