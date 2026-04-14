@@ -18,6 +18,7 @@ interface SubmitSJBBody {
   pin:          string;
   nama:         string;
   noKtp?:       string;
+  alamatNasabah?: string;
   telp1?:       string;
   telp2?:       string;
   kategori:     string;
@@ -75,7 +76,11 @@ export async function POST(request: NextRequest) {
 
     // idSJB: SJB-[outletId]-[yyyyMMdd]-[random4]
     const stamp = now.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }).replace(/-/g, '');
-    const idSJB = `SJB-${outletId}-${stamp}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const rand4 = String(Math.floor(1000 + Math.random() * 9000));
+    const idSJB = `SJB-${outletId}-${stamp}-${rand4}`;
+
+    // Barcode B = J + YYMMDD + NNN (format mirip gadai yang pakai G + YYMMDD + NNN)
+    const barcodeB = 'J' + stamp.substring(2) + rand4;
 
     // ── 6. Cari rak ───────────────────────────────────────────
     const { data: rak } = await db.rpc('get_assigned_rak', {
@@ -106,7 +111,7 @@ export async function POST(request: NextRequest) {
       lama_titip:    lamaTitip,       // repurpose ujrah_persen
       harga_buyback: hargaBuyback,    // repurpose ujrah_nominal
       barcode_a:     barcodeA,
-      barcode_b:     noSJB,
+      barcode_b:     barcodeB,
       rak:           assignedRak,
       status:        'AKTIF',
       payment:       body.payment,
@@ -150,7 +155,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      noSJB, idSJB, barcodeA, barcodeB: noSJB,
+      noSJB, idSJB, barcodeA, barcodeB,
       kasir,
       tglJual:  f(now),
       tglJT:    f(tglJT),
@@ -164,6 +169,7 @@ export async function POST(request: NextRequest) {
       statusKepalaGudang: outlet.status_kepala_gudang ?? '',
       nama:      body.nama,
       noKtp:     body.noKtp ?? '',
+      alamatNasabah: body.alamatNasabah ?? '',
       kategori:  body.kategori,
       barang:    body.barang,
       grade:     body.grade ?? '',

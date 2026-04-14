@@ -29,6 +29,7 @@ export default function SJBPage() {
   const [noKtp, setNoKtp] = useState('');
   const [telp1, setTelp1] = useState('');
   const [telp2, setTelp2] = useState('');
+  const [alamatNasabah, setAlamatNasabah] = useState('');
   const [kategori, setKategori] = useState('');
   const [grade, setGrade] = useState('');
   const [barang, setBarang] = useState('');
@@ -66,7 +67,7 @@ export default function SJBPage() {
   })();
 
   function resetAkadForm() {
-    setNama(''); setNoKtp(''); setTelp1(''); setTelp2('');
+    setNama(''); setNoKtp(''); setTelp1(''); setTelp2(''); setAlamatNasabah('');
     setKategori(''); setGrade(''); setBarang(''); setKelengkapan(''); setImeiSn('');
     setHargaJualRaw(''); setLamaTitip('30'); setHargaBuybackRaw('');
     setAkadPayment('CASH'); setAkadCashRaw(''); setAkadBankRaw(''); setAkadError('');
@@ -102,7 +103,7 @@ export default function SJBPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-outlet-id': String(outletId) },
         body: JSON.stringify({
-          pin, nama: nama.trim(), noKtp: noKtp.trim(), telp1: telp1.trim(), telp2: telp2.trim(),
+          pin, nama: nama.trim(), noKtp: noKtp.trim(), alamatNasabah: alamatNasabah.trim(), telp1: telp1.trim(), telp2: telp2.trim(),
           kategori, grade, barang: barang.trim(), kelengkapan: kelengkapan.trim(), imeiSn: imeiSn.trim(),
           hargaJual, lamaTitip: parseInt(lamaTitip) || 30, hargaBuyback,
           payment: akadPayment === 'SPLIT' ? 'SPLIT' : akadPayment,
@@ -114,7 +115,7 @@ export default function SJBPage() {
       // BUG FIX: simpan semua data dari response SEBELUM reset form
       // API response sudah include: nama, noKtp, kategori, barang, grade,
       // kelengkapan, imeiSn, hargaJual, hargaBuyback, lamaTitip, locationGudang, dll
-      setAkadSuccess({ ...json, kasir: kasirName, telp1: telp1.trim() });
+      setAkadSuccess({ ...json, kasir: kasirName, telp1: telp1.trim(), alamatNasabah: alamatNasabah.trim() });
       resetAkadForm(); loadAkadToday();
     } catch (e) { setAkadError('Server error: ' + (e as Error).message); }
     setAkadSubmitting(false);
@@ -305,6 +306,7 @@ export default function SJBPage() {
               <div className="form-group"><label>No. HP *</label><input value={telp1} onChange={e => setTelp1(e.target.value)} placeholder="08xx" /></div>
             </div>
             <div className="form-group"><label>No. HP 2</label><input value={telp2} onChange={e => setTelp2(e.target.value)} placeholder="Opsional" /></div>
+            <div className="form-group"><label>Alamat</label><input value={alamatNasabah} onChange={e => setAlamatNasabah(e.target.value)} placeholder="Alamat pemilik barang" /></div>
 
             <div className="form-section-label">Data Barang Titipan</div>
             <div className="form-row">

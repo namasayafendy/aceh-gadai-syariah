@@ -66,18 +66,18 @@ export async function GET(request: NextRequest) {
     });
 
     // 3. Ambil semua SJB AKTIF
-    // scanKey untuk SJB = id (karena barcodeB kosong untuk SJB, sesuai GAS)
+    // scanKey untuk SJB = barcode_b (format Jyymmddnnnn), fallback ke id jika kosong
     let sjbQ = db.from('tb_sjb')
-      .select('id,no_faktur,nama,kategori,barang,taksiran,harga_jual,tgl_gadai,tgl_jt,rak,status,outlet')
+      .select('id,no_faktur,nama,kategori,barang,taksiran,harga_jual,tgl_gadai,tgl_jt,rak,barcode_b,status,outlet')
       .in('status', ['AKTIF', 'BERJALAN']);
     if (outletFilter) sjbQ = sjbQ.eq('outlet', outletFilter);
     const { data: sjbRows } = await sjbQ;
 
     (sjbRows ?? []).forEach((r: any) => {
-      const idSJB = String(r.id || '').trim();
-      if (!idSJB) return;
+      const scanKey = String(r.barcode_b || r.id || '').trim();
+      if (!scanKey) return;
       items.push({
-        scanKey:   idSJB,      // untuk matching — TIDAK ditampilkan ke auditor
+        scanKey:   scanKey,    // barcode_b atau id — TIDAK ditampilkan ke auditor
         noFaktur:  r.no_faktur || '',
         nama:      r.nama || '',
         kategori:  r.kategori || '',
