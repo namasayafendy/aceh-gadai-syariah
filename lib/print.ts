@@ -232,17 +232,127 @@ export function printTebus(r: TebusPrintData) {
   }
 
   // Kontrak baru untuk PERPANJANG/TAMBAH/KURANG (uses printGadai format with updated data)
+  // Replika printKontrakBaruHtml() dari GAS tebus.html
   let kontrakPages = '';
+  const kontrakBcMap: {id:string;val:string}[] = [];
+
   if (r.cetakKontrak && r.barcodeA && r.barcodeB) {
-    const jmlBaru = (r.jumlahGadaiBaru && r.jumlahGadaiBaru > 0) ? r.jumlahGadaiBaru : r.jumlahGadai;
-    const ujBaru = r.ujrahBaru || r.ujrahBerjalan || 0;
-    // Re-use printGadai format — create inline HTML (same addendum, updated nominal/dates)
-    // This would be the kontrak baru pages — for now we call printGadai data mapping
-    // The actual kontrak baru is handled by calling printGadai separately after tebus
+    const isEmas = ['EMAS', 'EMAS PAUN'].includes((r.kategori || '').toUpperCase());
+    const statusLbl: Record<string,string> = {PERPANJANG:'PERPANJANGAN',TAMBAH:'PENAMBAHAN PINJAMAN',KURANG:'PENGURANGAN PINJAMAN'};
+    const stsLabel = statusLbl[r.status] || r.status;
+
+    const tglGadaiK = r.tglGadaiBaru || r.tglTebus || '';
+    const tglJTK    = r.tglJTBaru || '';
+    const tglSitaK  = r.tglSitaBaru || '';
+
+    const jmlGadaiK = (r.jumlahGadaiBaru && r.jumlahGadaiBaru > 0) ? r.jumlahGadaiBaru : r.jumlahGadai;
+    const ujrahK = r.ujrahBaru || r.ujrahBerjalan || 0;
+    const biayaAdmin = 10000;
+
+    // Breakdown ujrah
+    let bdK: number[] | null = null;
+    if (!isEmas && ujrahK > 0) {
+      const pp = Math.ceil(ujrahK / 6 / 1000) * 1000;
+      bdK = [1,2,3,4,5,6].map(i => pp * i);
+    }
+    const ujrahPerHariK = isEmas && ujrahK > 0 ? Math.ceil(ujrahK / 30 / 1000) * 1000 : 0;
+
+    const ad = getAddendumTexts(isEmas);
+    let kbCtr = 0;
+
+    function kbHdr(judul: string, barcode: string) {
+      kbCtr++;
+      const bcId = `bc-kb-${kbCtr}`;
+      kontrakBcMap.push({id:bcId,val:barcode});
+      const isBcB = barcode === r.barcodeB;
+      const rak = isBcB && r.locationGudang && r.locationGudang !== '\u2014'
+        ? `<div style="margin-top:4px;font-size:26px;font-weight:900;letter-spacing:3px;border:2px solid #000;padding:3px 8px;display:inline-block">${r.locationGudang}</div>` : '';
+      return `<div style="display:flex;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:8px">`
+        +`<div style="width:60px;min-width:60px;text-align:center"><div style="border:1px solid #000;width:50px;height:50px;margin:auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold">AG</div></div>`
+        +`<div style="flex:1;text-align:center"><div style="font-size:13px;font-weight:bold">${judul}</div><div style="font-size:12px;font-weight:bold">${r.namaPerusahaan||'ACEH GADAI SYARIAH'}</div><div style="font-size:9px">${stsLabel} — Telpon / WA Pusat ${r.telpon||''}</div><div style="font-size:9px">Alamat: ${r.alamat||''} | Telp/WA: ${r.telpon||''}</div></div>`
+        +`<div style="text-align:right;min-width:130px"><svg id="${bcId}" style="height:40px"></svg><div style="font-size:9px">${barcode}</div>${rak}</div></div>`
+        +`<div style="display:flex;justify-content:flex-end;font-size:10px;margin-bottom:6px"><span style="border:1px solid #000;padding:2px 8px"><b>No. SBR :</b>&nbsp;&nbsp;${r.noFaktur}</span></div>`;
+    }
+
+    function kbBody(akad: string) {
+      const penanda = akad==='ijarah'
+        ? `Kami yang bertanda tangan pada Surat AKAD IJARAH ini, yakni MUA'JIR (Pemberi sewa dalam hal ini PT. ACEH GADAI SYARIAH) dan MUSTA'JIR (Penyewa dalam hal ini NASABAH) sepakat`
+        : `Kami yang bertanda tangan pada Surat AKAD RAHN ini, yakni MURTAHIN (penerima gadai dalam hal ini PT.ACEH GADAI SYARIAH) dan RAHIN (Penggadai dalam hal ini Nasabah)`;
+      const keterangan = isEmas
+        ? `${r.barang||''} | ${r.grade||''}`
+        : `${r.barang||''} | ${r.kelengkapan||''} | IMEI: ${r.imeiSn||''}`;
+      const colStyle = `style="border:1px solid #000;padding:3px 6px;font-size:9px"`;
+      const hdStyle = `style="border:1px solid #000;padding:3px 6px;font-size:9px;font-weight:bold;background:#f0f0f0"`;
+
+      let table = `<table style="width:100%;border-collapse:collapse;margin-bottom:6px">`
+        +`<tr><td ${hdStyle} width="25%">Nama</td><td ${colStyle}>${r.namaNasabah||''}</td><td ${hdStyle} width="25%">Tgl Gadai</td><td ${colStyle}>${tglGadaiK}</td></tr>`
+        +`<tr><td ${hdStyle}>NIK</td><td ${colStyle}>${r.noKtp||''}</td><td ${hdStyle}>Tgl Jatuh Tempo</td><td ${colStyle}>${tglJTK}</td></tr>`
+        +`<tr><td ${hdStyle}>Telpon</td><td ${colStyle}>${r.telp1||''}</td><td ${hdStyle}>Tgl Sita / Jual</td><td ${colStyle}>${tglSitaK}</td></tr>`
+        +`<tr><td ${hdStyle}>Kategori</td><td ${colStyle}>${r.kategori||''}</td><td ${hdStyle}>Taksiran</td><td ${colStyle}>${fmtRp(r.taksiran||0)}</td></tr>`
+        +`<tr><td ${hdStyle}>Keterangan</td><td ${colStyle} colspan="3">${keterangan}</td></tr></table>`;
+
+      if (akad === 'ijarah') {
+        let ujrahTable = `<table style="width:100%;border-collapse:collapse;margin-bottom:4px">`
+          +`<tr><td ${hdStyle} width="50%">Jumlah Gadai</td><td ${colStyle}>${fmtRp(jmlGadaiK)}</td></tr>`
+          +`<tr><td ${hdStyle}>Biaya Admin</td><td ${colStyle}>${fmtRp(biayaAdmin)}</td></tr>`;
+        if (isEmas) {
+          ujrahTable += `<tr><td ${hdStyle}>Ujrah / bulan</td><td ${colStyle}>${fmtRp(ujrahK)}</td></tr>`
+            +`<tr><td ${hdStyle}>Ujrah / hari</td><td ${colStyle}>${ujrahPerHariK > 0 ? fmtRp(ujrahPerHariK) : '-'}</td></tr>`;
+        } else {
+          ujrahTable += `<tr><td ${hdStyle}>Ujrah / bulan</td><td ${colStyle}>${fmtRp(ujrahK)}</td></tr>`;
+          if (bdK) {
+            ujrahTable += `<tr><td ${hdStyle} colspan="2" style="font-size:8px;text-align:center">Rincian per 5 hari: ${bdK.map((v,i) => `${(i+1)*5}hr=${fmtRp(v)}`).join(' | ')}</td></tr>`;
+          }
+        }
+        ujrahTable += `</table>`;
+        table += ujrahTable;
+      } else {
+        table += `<table style="width:100%;border-collapse:collapse;margin-bottom:4px">`
+          +`<tr><td ${hdStyle} width="50%">Jumlah Gadai (Marhun Bih)</td><td ${colStyle}>${fmtRp(jmlGadaiK)}</td></tr>`
+          +`<tr><td ${hdStyle}>Taksiran (Marhun)</td><td ${colStyle}>${fmtRp(r.taksiran||0)}</td></tr></table>`;
+      }
+
+      return `<p style="font-size:9px;margin-bottom:6px">${penanda}</p>${table}`;
+    }
+
+    function kbAddendum(left: string, right: string) {
+      return `<div style="display:flex;gap:8px;font-size:8px;line-height:1.4"><div style="flex:1">${left}</div><div style="flex:1">${right}</div></div>`;
+    }
+
+    function kbFooterIjarah(lembar: string) {
+      return `<div style="display:flex;margin-top:12px;font-size:9px"><div style="flex:1;text-align:center">MUA'JIR<br><br><br><span style="border-top:1px solid #000;padding-top:3px">${r.kasir||''}</span></div><div style="flex:1;text-align:center">MUSTA'JIR<br><br><br><span style="border-top:1px solid #000;padding-top:3px">${r.namaNasabah||''}</span></div></div><div style="text-align:right;font-size:8px;margin-top:4px">*) Lembar ${lembar}</div>`;
+    }
+    function kbFooterSBR(lembar: string) {
+      return `<div style="display:flex;margin-top:12px;font-size:9px"><div style="flex:1;text-align:center">MURTAHIN<br><br><br><span style="border-top:1px solid #000;padding-top:3px">${r.kasir||''}</span></div><div style="flex:1;text-align:center">RAHIN<br><br><br><span style="border-top:1px solid #000;padding-top:3px">${r.namaNasabah||''}</span></div></div><div style="text-align:right;font-size:8px;margin-top:4px">*) Lembar ${lembar}</div>`;
+    }
+
+    function kbPage(barcode: string, akad: 'ijarah'|'sbr', lembar: string) {
+      const judul = akad==='ijarah' ? 'AKAD IJARAH (SEWA PENYIMPANAN)' : 'SURAT BUKTI RAHN(AKAD RAHN)';
+      const sepakat = akad==='ijarah' ? 'Sepakat membuat Akad ijarah sebagai berikut:' : 'Sepakat membuat akad rahn sebagai berikut :';
+      let addL: string, addR: string, ft: string;
+      if (akad==='ijarah') {
+        addL = isEmas ? ad.addIjarahEmas_L : ad.addIjarahHP_L;
+        addR = isEmas ? ad.addIjarahEmas_R : ad.addIjarahHP_R;
+        ft = kbFooterIjarah(lembar);
+      } else {
+        addL = ad.addSBR_L;
+        addR = (isEmas ? ad.addSBR_R_EMAS : ad.addSBR_R_HP) + ad.addSBR_R_common;
+        ft = kbFooterSBR(lembar);
+      }
+      return `<div class="page-a4">${kbHdr(judul,barcode)}${kbBody(akad)}<p style="font-size:9px;margin:4px 0">${sepakat}</p><p style="font-weight:bold;font-size:10px;text-align:right;margin-top:6px">ADDENDUM</p>${kbAddendum(addL,addR)}${ft}</div>`;
+    }
+
+    kontrakPages = kbPage(r.barcodeA,'ijarah','Customer')
+      + kbPage(r.barcodeA,'sbr','Customer')
+      + kbPage(r.barcodeB,'ijarah','Perusahaan')
+      + kbPage(r.barcodeB,'sbr','Perusahaan');
   }
 
   const pages = nota('Nasabah') + nota('Perusahaan') + suratKehilangan() + suratDiskon();
-  openPrintWindow(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Nota ${label} ${r.noFaktur||''}</title><script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script><style>${BASE_CSS}</style></head><body><div class="noprint"><button onclick="window.print()" style="padding:6px 16px;margin-right:8px">🖨️ Print</button><button onclick="window.close()" style="padding:6px 12px">✕ Tutup</button>${r.cetakKontrak?'<span style="font-size:11px;margin-left:12px;color:#888">Termasuk kontrak baru</span>':''}</div>${pages}${kontrakPages}</body></html>`);
+  const kbBcScript = kontrakBcMap.length > 0
+    ? `<script>window.addEventListener('load',function(){${kontrakBcMap.map(b => `try{JsBarcode(document.getElementById("${b.id}"),"${b.val}",{format:"CODE128",width:1.2,height:35,displayValue:false});}catch(e){}`).join('\n')}});<\/script>`
+    : '';
+  openPrintWindow(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Nota ${label} ${r.noFaktur||''}</title><script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script><style>${BASE_CSS}.page-a4{background:#fff;width:210mm;min-height:297mm;padding:12mm 15mm;margin:0 auto 10px;page-break-after:always}.page-a4:last-child{page-break-after:avoid}@media print{.page-a4{margin:0;page-break-after:always}.page-a4:last-child{page-break-after:avoid}}</style></head><body><div class="noprint"><button onclick="window.print()" style="padding:6px 16px;margin-right:8px">🖨️ Print</button><button onclick="window.close()" style="padding:6px 12px">✕ Tutup</button>${r.cetakKontrak?'<span style="font-size:11px;margin-left:12px;color:#888">Termasuk kontrak baru (4 lembar)</span>':''}</div>${pages}${kontrakPages}${kbBcScript}</body></html>`);
 }
 
 // ════════════════════════════════════════════════════════════
