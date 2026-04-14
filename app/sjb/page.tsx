@@ -111,7 +111,10 @@ export default function SJBPage() {
       });
       const json = await res.json();
       if (!json.ok) { setAkadError(json.msg || 'Gagal submit'); setAkadSubmitting(false); return; }
-      setAkadSuccess({ ...json, kasir: kasirName });
+      // BUG FIX: simpan semua data dari response SEBELUM reset form
+      // API response sudah include: nama, noKtp, kategori, barang, grade,
+      // kelengkapan, imeiSn, hargaJual, hargaBuyback, lamaTitip, locationGudang, dll
+      setAkadSuccess({ ...json, kasir: kasirName, telp1: telp1.trim() });
       resetAkadForm(); loadAkadToday();
     } catch (e) { setAkadError('Server error: ' + (e as Error).message); }
     setAkadSubmitting(false);
@@ -133,6 +136,7 @@ export default function SJBPage() {
   const [bbSearching, setBbSearching] = useState(false);
   const [bbSearchError, setBbSearchError] = useState('');
   const [bbData, setBbData] = useState<any>(null);
+  const [bbTanpaSurat, setBbTanpaSurat] = useState(false); // FIX: track tanpaSurat dari search
   const [bbStatus, setBbStatus] = useState('');
   const [bbJmlBayarRaw, setBbJmlBayarRaw] = useState('');
   const [bbAlasan, setBbAlasan] = useState('');
@@ -148,7 +152,7 @@ export default function SJBPage() {
   async function searchBuyback() {
     const bc = bbBarcode.trim().toUpperCase();
     if (!bc) { setBbSearchError('Masukkan barcode atau No. SJB'); return; }
-    setBbSearching(true); setBbSearchError(''); setBbData(null); setBbStatus('');
+    setBbSearching(true); setBbSearchError(''); setBbData(null); setBbStatus(''); setBbTanpaSurat(false);
     try {
       const res = await fetch('/api/gadai/search', {
         method: 'POST',
@@ -158,6 +162,8 @@ export default function SJBPage() {
       const json = await res.json();
       if (!json.ok) { setBbSearchError(json.msg); setBbSearching(false); return; }
       setBbData(json.data);
+      // FIX: simpan tanpaSurat flag dari search response (sesuai GAS)
+      setBbTanpaSurat(json.tanpaSurat === true);
     } catch (e) { setBbSearchError('Error: ' + (e as Error).message); }
     setBbSearching(false);
   }
@@ -176,10 +182,44 @@ export default function SJBPage() {
     if (bbStatus !== 'SITA') setBbJmlBayarRaw(total > 0 ? total.toLocaleString('id-ID') : '');
   }, [bbStatus, bbData]);
 
+  // FIX: validasi client-side sesuai GAS (diskon, tanpaSurat, catatan wajib)
   function requestSubmitBuyback() {
     if (!bbStatus) { setBbError('Pilih aksi'); return; }
     if (!bbData) { setBbError('Scan barcode dulu'); return; }
-    if (bbStatus !== 'SITA' && !parseMoney(bbJmlBayarRaw)) { setBbError('Isi Jumlah Bayar'); return; }
+
+    const jmlBayar = parseMoney(bbJmlBayarRaw);
+    const al = bbAlasan.trim();
+
+    if (bbStatus !== 'SITA') {
+      if (!jmlBayar) { setBbError('Isi Jumlah Bayar'); return; }
+
+      // FIX Bug 4+5: Wajib catatan jika ada diskon (sesuai GAS)
+      const adaDiskon = jmlBayar < bbTotalSistem;
+      if (adaDiskon && (!al || al.replace(/\s+/g, '').length < 2)) {
+        setBbError(
+          `Jumlah bayar (${formatRp(jmlBayar)}) lebih kecil dari sistem (${formatRp(bbTotalSistem)})! ` +
+          `Ada selisih ${formatRp(bbTotalSistem - jmlBayar)} — Catatan WAJIB diisi.`
+        );
+        return;
+      }
+
+      // FIX Bug 3+5: Wajib catatan jika tanpa surat (sesuai GAS)
+      if (bbTanpaSurat && (!al || al.replace(/\s+/g, '').length < 2)) {
+        setBbError('Transaksi TANPA SURAT: Catatan wajib diisi.');
+        return;
+      }
+
+      // Split validation
+      if (bbPayment === 'SPLIT') {
+        const sc = parseMoney(bbCashRaw), sb = parseMoney(bbBankRaw);
+        if (sb <= 0) { setBbError('Bagian Bank harus > 0 untuk split'); return; }
+        if (Math.abs(sc + sb - jmlBayar) > 1) {
+          setBbError(`Total split (${formatRp(sc + sb)}) tidak sama dengan Jumlah Bayar (${formatRp(jmlBayar)})`);
+          return;
+        }
+      }
+    }
+
     setBbError(''); setBbPinOpen(true);
   }
 
@@ -189,27 +229,27 @@ export default function SJBPage() {
     const cashVal = bbPayment === 'CASH' ? jmlBayar : bbPayment === 'BANK' ? 0 : parseMoney(bbCashRaw);
     const bankVal = bbPayment === 'BANK' ? jmlBayar : bbPayment === 'CASH' ? 0 : parseMoney(bbBankRaw);
     try {
-      const res = await fetch('/api/tebus/submit', {
+      const res = await fetch('/api/sjb/buyback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-outlet-id': String(outletId) },
         body: JSON.stringify({
-          pin, status: bbStatus, idGadai: bbData.id, noFaktur: bbData.no_faktur,
-          barcodeA: bbData.barcode_a, namaNasabah: bbData.nama,
+          pin, status: bbStatus, idSJB: bbData.id, noSJB: bbData.no_faktur,
+          barcodeA: bbData.barcode_a, nama: bbData.nama,
           kategori: bbData.kategori, barang: bbData.barang,
           taksiran: bbData.taksiran || bbData.harga_jual,
-          jumlahGadai: bbData.harga_jual,
+          hargaJual: bbData.harga_jual,
           hariAktual: 0, ujrahBerjalan: 0,
-          totalTebusSistem: bbTotalSistem, jumlahBayar: jmlBayar,
+          totalSistem: bbTotalSistem, jumlahBayar: jmlBayar,
           alasan: bbAlasan.trim(),
           payment: bbPayment === 'SPLIT' ? 'SPLIT' : bbPayment,
           cash: cashVal, bank: bankVal,
-          _source: 'SJB',
+          tanpaSurat: bbTanpaSurat, // FIX: pass tanpaSurat ke API
         }),
       });
       const json = await res.json();
       if (!json.ok) { setBbError(json.msg || 'Gagal submit'); setBbSubmitting(false); return; }
       setBbSuccess({ ...json, kasir: kasirName, status: bbStatus });
-      setBbBarcode(''); setBbData(null); setBbStatus(''); setBbJmlBayarRaw(''); setBbAlasan('');
+      setBbBarcode(''); setBbData(null); setBbStatus(''); setBbJmlBayarRaw(''); setBbAlasan(''); setBbTanpaSurat(false);
     } catch (e) { setBbError('Server error: ' + (e as Error).message); }
     setBbSubmitting(false);
   }
@@ -318,7 +358,7 @@ export default function SJBPage() {
               </div>
             )}
 
-            {akadError && <div className="alert-error">⚠️ {akadError}</div>}
+            {akadError && <div className="alert-error">{akadError}</div>}
             <div className="submit-area">
               <button className="btn btn-primary btn-full" onClick={requestSubmitAkad} disabled={akadSubmitting}>
                 {akadSubmitting ? '⏳ Menyimpan...' : '📋 SUBMIT AKAD SJB'}
@@ -366,7 +406,7 @@ export default function SJBPage() {
                 </button>
               </div>
             </div>
-            {bbSearchError && <div className="alert-error">⚠️ {bbSearchError}</div>}
+            {bbSearchError && <div className="alert-error">{bbSearchError}</div>}
 
             {bbData && (
               <>
@@ -381,6 +421,13 @@ export default function SJBPage() {
                     <div style={{ gridColumn: 'span 2' }}>Barang: <b>{bbData.barang}</b></div>
                   </div>
                 </div>
+
+                {/* FIX Bug 3: Warning tanpa surat (sesuai GAS) */}
+                {bbTanpaSurat && (
+                  <div style={{ background: '#fff3cd', border: '1px solid #f59e0b', borderRadius: 6, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#92400e' }}>
+                    ⚠️ <b>TRANSAKSI TANPA SURAT</b> — Pemilik tidak membawa SJB asli. Catatan wajib diisi.
+                  </div>
+                )}
 
                 <div className="form-group">
                   <label>Pilih Aksi *</label>
@@ -409,8 +456,8 @@ export default function SJBPage() {
                           <input value={bbJmlBayarRaw} inputMode="numeric" onChange={e => setBbJmlBayarRaw(formatMoneyInput(e.target.value))} />
                         </div>
                         <div className="form-group">
-                          <label>Catatan / Alasan</label>
-                          <input value={bbAlasan} onChange={e => setBbAlasan(e.target.value)} placeholder="Alasan diskon dll" />
+                          <label>Catatan / Alasan {(bbTanpaSurat || (parseMoney(bbJmlBayarRaw) > 0 && parseMoney(bbJmlBayarRaw) < bbTotalSistem)) ? <span style={{ color: 'var(--red)' }}>* wajib jika diskon/tanpa surat</span> : null}</label>
+                          <input value={bbAlasan} onChange={e => setBbAlasan(e.target.value)} placeholder="Alasan diskon, keterangan kehilangan surat, dll" />
                         </div>
                         <div className="payment-tabs">
                           {(['CASH', 'BANK', 'SPLIT'] as const).map(m => (
@@ -428,7 +475,7 @@ export default function SJBPage() {
                       </>
                     )}
 
-                    {bbError && <div className="alert-error">⚠️ {bbError}</div>}
+                    {bbError && <div className="alert-error">{bbError}</div>}
                     <div className="submit-area">
                       <button className="btn btn-success btn-full" onClick={requestSubmitBuyback} disabled={bbSubmitting}>
                         {bbSubmitting ? '⏳' : `SUBMIT ${bbStatus}`}
@@ -457,14 +504,63 @@ export default function SJBPage() {
         onSuccess={(pin, k) => doSubmitBuyback(pin, k)} onCancel={() => setBbPinOpen(false)} />
 
       {/* Success Modals */}
-      {(akadSuccess || bbSuccess) && (
-        <div className="success-overlay" onClick={() => { setAkadSuccess(null); setBbSuccess(null); }}>
+      {akadSuccess && (
+        <div className="success-overlay" onClick={() => setAkadSuccess(null)}>
           <div className="success-modal" onClick={e => e.stopPropagation()}>
             <div className="check">✅</div>
-            <h3>{akadSuccess ? 'Akad SJB Berhasil!' : `${bbSuccess?.status} Berhasil!`}</h3>
+            <h3>Akad SJB Berhasil!</h3>
+            <div style={{ fontSize: 12, margin: '8px 0 12px', textAlign: 'left' }}>
+              <div>No SJB: <b>{akadSuccess.noSJB}</b></div>
+              <div>Nama: <b>{akadSuccess.nama}</b></div>
+              <div>Barang: <b>{akadSuccess.barang}</b></div>
+              <div>Harga Jual: <b>{formatRp(akadSuccess.hargaJual)}</b></div>
+              <div>Buyback: <b>{formatRp(akadSuccess.hargaBuyback)}</b></div>
+              <div>Rak: <b>{akadSuccess.locationGudang || '—'}</b></div>
+            </div>
             <div className="success-actions">
-              <button className="btn btn-primary btn-full" onClick={() => printSJB({ noSJB: akadSuccess?.noSJB || '', nama, noKtp, telp1, kategori, barang, kelengkapan, grade, imeiSn, hargaJual, hargaBuyback, lamaTitip: parseInt(lamaTitip) || 30, tglJual: akadSuccess?.tglJual || '', tglJT: akadSuccess?.tglJT || '', barcodeA: akadSuccess?.barcodeA || '', barcodeB: akadSuccess?.barcodeB || '', kasir: akadSuccess?.kasir || '', outlet: akadSuccess?.outlet || '', alamat: akadSuccess?.alamat || '', kota: akadSuccess?.kota || '', telpon: akadSuccess?.telpon || '', namaPerusahaan: akadSuccess?.namaPerusahaan || 'PT. ACEH GADAI SYARIAH' })}>🖨️ Cetak</button>
-              <button className="btn btn-outline btn-full" onClick={() => { setAkadSuccess(null); setBbSuccess(null); }}>Tutup</button>
+              {/* BUG FIX 1+2: pakai data dari akadSuccess (API response), BUKAN form state yg sudah di-reset */}
+              <button className="btn btn-primary btn-full" onClick={() => printSJB({
+                noSJB: akadSuccess.noSJB || '',
+                nama: akadSuccess.nama || '',
+                noKtp: akadSuccess.noKtp || '',
+                telp1: akadSuccess.telp1 || '',
+                kategori: akadSuccess.kategori || '',
+                barang: akadSuccess.barang || '',
+                kelengkapan: akadSuccess.kelengkapan || '',
+                grade: akadSuccess.grade || '',
+                imeiSn: akadSuccess.imeiSn || '',
+                hargaJual: akadSuccess.hargaJual || 0,
+                hargaBuyback: akadSuccess.hargaBuyback || 0,
+                lamaTitip: akadSuccess.lamaTitip || 30,
+                tglJual: akadSuccess.tglJual || '',
+                tglJT: akadSuccess.tglJT || '',
+                barcodeA: akadSuccess.barcodeA || '',
+                barcodeB: akadSuccess.barcodeB || '',
+                kasir: akadSuccess.kasir || '',
+                outlet: akadSuccess.outlet || '',
+                alamat: akadSuccess.alamat || '',
+                kota: akadSuccess.kota || '',
+                telpon: akadSuccess.telpon || '',
+                namaPerusahaan: akadSuccess.namaPerusahaan || 'PT. ACEH GADAI SYARIAH',
+                locationGudang: akadSuccess.locationGudang || '',
+              })}>🖨️ Cetak Kontrak</button>
+              <button className="btn btn-outline btn-full" onClick={() => setAkadSuccess(null)}>Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bbSuccess && (
+        <div className="success-overlay" onClick={() => setBbSuccess(null)}>
+          <div className="success-modal" onClick={e => e.stopPropagation()}>
+            <div className="check">✅</div>
+            <h3>{bbSuccess.status} Berhasil!</h3>
+            <div className="success-actions">
+              <button className="btn btn-primary btn-full" onClick={() => {
+                // TODO: implement printSJBTebus for buyback nota
+                // For now, close the modal
+                setBbSuccess(null);
+              }}>Tutup</button>
             </div>
           </div>
         </div>
