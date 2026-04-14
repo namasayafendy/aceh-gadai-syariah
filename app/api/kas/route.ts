@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
   try {
     const db       = await createServiceClient();
     const { searchParams } = new URL(request.url);
-    const outletId = parseInt(request.headers.get('x-outlet-id') ?? '1', 10) || 1;
+    const outletId = parseInt(searchParams.get('outletId') ?? request.headers.get('x-outlet-id') ?? '1', 10) || 1;
 
     const tglFrom = searchParams.get('tglFrom') ?? null;  // yyyy-MM-dd
     const tglTo   = searchParams.get('tglTo')   ?? null;
