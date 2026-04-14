@@ -169,13 +169,12 @@ function RiwayatResult({ data }: { data: any }) {
           <DataRow label="Taksiran" value={formatRp(g.taksiran)} green />
           <DataRow label={isSJB ? 'Harga Jual' : 'Jumlah Gadai'} value={formatRp(g.jumlahGadai)} bold />
           {!isSJB && <DataRow label="Ujrah/Bulan" value={formatRp(g.ujrahNominal)} />}
-          {isSJB && <DataRow label="Harga Buyback" value={formatRp(g.ujrahNominal)} />}
-          {isSJB && <DataRow label="Lama Titip" value={`${g.ujrahPersen} hari`} />}
+          {!isSJB && <DataRow label="Total Tebus (Sistem)" value={formatRp(g.jumlahGadai + g.ujrahNominal)} bold green />}
+          {isSJB && <DataRow label="Harga Buyback" value={formatRp(g.hargaBuyback)} bold />}
+          {isSJB && <DataRow label="Lama Titip" value={`${g.lamaTitip} hari`} />}
           <DataRow label="Payment" value={g.payment} />
           <DataRow label="Kasir" value={g.kasir} />
           <DataRow label="Outlet" value={g.outlet} />
-          {g.barcodeA && <DataRow label="Barcode A" value={g.barcodeA} mono />}
-          {g.barcodeB && <DataRow label="Barcode B" value={g.barcodeB} mono />}
           {g.rak && <DataRow label="Lokasi Rak" value={g.rak} />}
         </div>
       </div>

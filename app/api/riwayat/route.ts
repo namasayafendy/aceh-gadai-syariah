@@ -62,8 +62,6 @@ export async function POST(request: NextRequest) {
           outlet: r.outlet,
           status: r.status,
           warning: r.warning ?? '',
-          barcodeA: r.barcode_a ?? '',
-          barcodeB: r.barcode_b ?? '',
           rak: r.rak ?? '',
         };
       }
@@ -94,16 +92,16 @@ export async function POST(request: NextRequest) {
           grade: r.grade ?? '',
           taksiran: Number(r.taksiran ?? 0),
           jumlahGadai: Number(r.harga_jual ?? 0),
-          // SJB repurposes fields
-          ujrahPersen: Number(r.ujrah_persen ?? 0),  // = lama_titip
-          ujrahNominal: Number(r.ujrah_nominal ?? 0), // = harga_buyback
+          // SJB specific fields
+          lamaTitip: Number(r.lama_titip ?? 0),
+          hargaBuyback: Number(r.harga_buyback ?? 0),
+          ujrahPersen: 0,
+          ujrahNominal: 0,
           payment: r.payment,
           kasir: r.kasir,
           outlet: r.outlet,
           status: r.status,
           warning: r.warning ?? '',
-          barcodeA: r.barcode_a ?? '',
-          barcodeB: r.barcode_b ?? '',
           rak: r.rak ?? '',
         };
       }
