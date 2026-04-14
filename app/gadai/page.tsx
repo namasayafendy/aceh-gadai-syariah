@@ -109,6 +109,7 @@ export default function GadaiPage() {
     if (!taksiran) errs.push('Taksiran');
     if (!jmlGadai) errs.push('Jml Gadai');
     if (errs.length) { setError('Field wajib belum diisi: ' + errs.join(', ')); return; }
+    if (noKtp.trim().replace(/\D/g, '').length !== 16) { setError('No KTP/NIK harus tepat 16 digit!'); return; }
     if (jmlGadai > taksiran) { setError('Jumlah gadai tidak boleh melebihi taksiran!'); return; }
     if (payment === 'SPLIT') {
       const c = parseMoney(cashRaw), b = parseMoney(bankRaw);

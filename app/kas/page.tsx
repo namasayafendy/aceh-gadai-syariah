@@ -55,9 +55,9 @@ export default function BukuKasPage() {
     setLoading(true);
     try {
       let url = `/api/kas?outletId=${outletId}`;
-      if (dateFrom) url += `&from=${dateFrom}`;
-      if (dateTo) url += `&to=${dateTo}`;
-      if (filterKas) url += `&tipeKas=${filterKas}`;
+      if (dateFrom) url += `&tglFrom=${dateFrom}`;
+      if (dateTo) url += `&tglTo=${dateTo}`;
+      if (filterKas) url += `&filter=${filterKas}`;
       const res = await fetch(url);
       const json = await res.json();
       if (json.ok) {
@@ -120,9 +120,6 @@ export default function BukuKasPage() {
       loadKas();
     } catch (e) { setSaError('Error: ' + (e as Error).message); }
   }
-
-  // ── Running balance calc ───────────────────────────────
-  let runCash = 0, runBank = 0;
 
   return (
     <AppShell title="Buku Kas" subtitle="Entri kas & running balance">
@@ -252,13 +249,7 @@ export default function BukuKasPage() {
               <tbody>
                 {rows.length === 0 ? (
                   <tr><td colSpan={8} className="empty-state">{loading ? 'Memuat...' : 'Tidak ada data'}</td></tr>
-                ) : rows.map((r, i) => {
-                  // Running balance
-                  if (r.tipe_kas === 'CASH') {
-                    runCash += r.tipe === 'MASUK' ? r.jumlah : -r.jumlah;
-                  } else {
-                    runBank += r.tipe === 'MASUK' ? r.jumlah : -r.jumlah;
-                  }
+                ) : rows.map((r: any, i: number) => {
                   return (
                     <tr key={r.id || i} style={{ borderBottom: '1px solid rgba(46,51,73,.5)' }}>
                       <td style={{ padding: '7px 10px', fontFamily: 'var(--mono)', fontSize: 11 }}>
@@ -276,8 +267,8 @@ export default function BukuKasPage() {
                       <td style={{ padding: '7px 10px', textAlign: 'right', fontFamily: 'var(--mono)', color: r.tipe === 'MASUK' ? 'var(--green)' : 'var(--red)' }}>
                         {formatRp(r.jumlah)}
                       </td>
-                      <td style={{ padding: '7px 10px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11 }}>{formatRp(runCash)}</td>
-                      <td style={{ padding: '7px 10px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11 }}>{formatRp(runBank)}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11 }}>{formatRp(r.saldoCash ?? 0)}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 11 }}>{formatRp(r.saldoBank ?? 0)}</td>
                       <td style={{ padding: '7px 10px' }}>
                         <span style={{ fontSize: 9, color: 'var(--text3)' }}>{r.sumber}</span>
                       </td>

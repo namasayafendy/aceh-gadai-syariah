@@ -288,7 +288,44 @@ export default function TebusPage() {
       });
       const json = await res.json();
       if (!json.ok) { setError(json.msg || 'Gagal submit'); setSubmitting(false); return; }
-      setSuccessData({ ...json, kasir: kasirName, status: tebusStatus });
+
+      // ── Simpan SEMUA data print SEBELUM reset ──
+      // Karena resetForm() akan clear gadaiData & semua state
+      const selisihVal = totalSistem > 0 ? totalSistem - jmlBayar : 0;
+      setSuccessData({
+        ...json,
+        kasir: kasirName,
+        status: tebusStatus,
+        // Data gadai yang diperlukan untuk cetak nota
+        _print: {
+          noFaktur: d.no_faktur,
+          namaNasabah: d.nama,
+          noKtp: d.no_ktp,
+          telp1: d.telp1,
+          kategori: d.kategori,
+          barang: d.barang,
+          kelengkapan: d.kelengkapan,
+          grade: d.grade,
+          imeiSn: d.imei_sn,
+          locationGudang: d.rak || '',
+          tglGadai: d.tgl_gadai,
+          jumlahGadai: d.jumlah_gadai,
+          taksiran: d.taksiran,
+          ujrahBerjalan,
+          hariAktual,
+          totalTebusSistem: totalSistem,
+          jumlahBayar: jmlBayar,
+          selisih: selisihVal,
+          alasan: alasan.trim(),
+          payment,
+          cash: cashVal,
+          bank: bankVal,
+          tanpaSurat,
+          barcodeA: d.barcode_a,
+          barcodeB: d.barcode_b,
+          jumlahGadaiBaru: jmlGadaiBaru,
+        },
+      });
       resetForm(); loadTodayList();
     } catch (e) { setError('Server error: ' + (e as Error).message); }
     setSubmitting(false);
@@ -605,7 +642,53 @@ export default function TebusPage() {
               ))}
             </div>
             <div className="success-actions">
-              <button className="btn btn-primary btn-full" onClick={() => printTebus({ idTebus: successData.idTebus, noFaktur: gadaiData?.no_faktur || '', status: successData.status, tglTebus: successData.tglTebus || new Date().toLocaleDateString('id-ID'), namaNasabah: gadaiData?.nama || '', kategori: gadaiData?.kategori || '', barang: gadaiData?.barang || '', jumlahGadai: gadaiData?.jumlah_gadai || 0, ujrahBerjalan, hariAktual, totalTebusSistem: totalSistem, jumlahBayar: jmlBayar, payment, kasir: successData.kasir, outlet: successData.outlet || '', alamat: successData.alamat || '', kota: successData.kota || '', telpon: successData.telpon || '', namaPerusahaan: successData.namaPerusahaan || 'PT. ACEH GADAI SYARIAH' })}>🖨️ Cetak</button>
+              <button className="btn btn-primary btn-full" onClick={() => {
+                const p = successData._print || {};
+                printTebus({
+                  idTebus: successData.idTebus,
+                  noFaktur: p.noFaktur || '',
+                  status: successData.status,
+                  tglGadai: p.tglGadai || '',
+                  tglTebus: successData.tglTebus || new Date().toLocaleDateString('id-ID'),
+                  namaNasabah: p.namaNasabah || '',
+                  noKtp: p.noKtp || '',
+                  telp1: p.telp1 || '',
+                  kategori: p.kategori || '',
+                  barang: p.barang || '',
+                  kelengkapan: p.kelengkapan || '',
+                  grade: p.grade || '',
+                  imeiSn: p.imeiSn || '',
+                  locationGudang: p.locationGudang || '',
+                  jumlahGadai: p.jumlahGadai || 0,
+                  ujrahBerjalan: p.ujrahBerjalan || 0,
+                  hariAktual: p.hariAktual || 0,
+                  totalTebusSistem: p.totalTebusSistem || 0,
+                  jumlahBayar: p.jumlahBayar || 0,
+                  selisih: p.selisih || 0,
+                  alasan: p.alasan || '',
+                  idDiskon: successData.idDiskon || '',
+                  idKehilangan: successData.idKehilangan || '',
+                  tanpaSurat: p.tanpaSurat || false,
+                  payment: p.payment || 'CASH',
+                  cash: p.cash || 0,
+                  bank: p.bank || 0,
+                  kasir: successData.kasir,
+                  outlet: successData.outlet || '',
+                  alamat: successData.alamat || '',
+                  kota: successData.kota || '',
+                  telpon: successData.telpon || '',
+                  namaPerusahaan: successData.namaPerusahaan || 'PT. ACEH GADAI SYARIAH',
+                  waktuOperasional: successData.waktuOperasional || '',
+                  taksiran: p.taksiran || 0,
+                  cetakKontrak: !!successData.tglGadaiBaru,
+                  barcodeA: p.barcodeA || '',
+                  barcodeB: p.barcodeB || '',
+                  tglGadaiBaru: successData.tglGadaiBaru || '',
+                  tglJTBaru: successData.tglJTBaru || '',
+                  tglSitaBaru: successData.tglSitaBaru || '',
+                  jumlahGadaiBaru: p.jumlahGadaiBaru || 0,
+                });
+              }}>🖨️ Cetak</button>
               <button className="btn btn-outline btn-full" onClick={() => setSuccessData(null)}>Tutup</button>
             </div>
           </div>

@@ -55,6 +55,55 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ok: true, logs: logs ?? [] });
     }
 
+    // ── Reprint: cari kontrak gadai/SJB by no_faktur or barcode ──
+    if (action === 'reprint') {
+      const input = String(searchParams.get('q') ?? '').trim().toUpperCase();
+      if (!input) return NextResponse.json({ ok: false, msg: 'Masukkan No Faktur atau barcode.' });
+
+      // Search tb_gadai
+      const { data: gadaiRows } = await db
+        .from('tb_gadai').select('*')
+        .or(`no_faktur.ilike.${input},barcode_a.eq.${input},barcode_b.eq.${input}`)
+        .limit(5);
+
+      // Search tb_sjb
+      const { data: sjbRows } = await db
+        .from('tb_sjb').select('*')
+        .or(`no_faktur.ilike.${input},barcode_a.eq.${input}`)
+        .limit(5);
+
+      const allRows = [
+        ...(gadaiRows ?? []).map((r: any) => ({ ...r, _source: 'GADAI' })),
+        ...(sjbRows ?? []).map((r: any) => ({ ...r, _source: 'SJB' })),
+      ];
+
+      if (allRows.length === 0) {
+        return NextResponse.json({ ok: false, msg: 'Kontrak tidak ditemukan.' });
+      }
+
+      const row = allRows[0];
+      const source = row._source;
+
+      // Get outlet info
+      let outletInfo: any = {};
+      if (row.outlet) {
+        const { data: outletRow } = await db.from('outlets').select('*').eq('nama', row.outlet).single();
+        if (outletRow) {
+          outletInfo = {
+            outlet: outletRow.nama ?? '',
+            alamat: outletRow.alamat ?? '',
+            kota: outletRow.kota ?? '',
+            telpon: outletRow.telepon ?? '',
+            namaPerusahaan: outletRow.nama_perusahaan ?? 'PT. ACEH GADAI SYARIAH',
+            waktuOperasional: outletRow.waktu_operasional ?? '',
+            biayaAdmin: outletRow.biaya_admin ?? 10000,
+          };
+        }
+      }
+
+      return NextResponse.json({ ok: true, data: row, source, ...outletInfo });
+    }
+
     return NextResponse.json({ ok: false, msg: 'Unknown action' });
   } catch (err) {
     console.error('[owner GET]', err);

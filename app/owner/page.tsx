@@ -11,8 +11,9 @@ import AppShell from '@/components/ui/AppShell';
 import PinModal from '@/components/ui/PinModal';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { formatRp, formatDate } from '@/lib/format';
+import { printGadai, printSJB } from '@/lib/print';
 
-type OwnerTab = 'ringkasan' | 'karyawan' | 'rak' | 'outlet' | 'backup';
+type OwnerTab = 'ringkasan' | 'karyawan' | 'rak' | 'outlet' | 'backup' | 'reprint';
 
 const TABS: { id: OwnerTab; icon: string; label: string }[] = [
   { id: 'ringkasan', icon: '📊', label: 'Ringkasan' },
@@ -20,11 +21,14 @@ const TABS: { id: OwnerTab; icon: string; label: string }[] = [
   { id: 'rak', icon: '📦', label: 'Rak Gudang' },
   { id: 'outlet', icon: '🏢', label: 'Outlet' },
   { id: 'backup', icon: '💾', label: 'Backup Status' },
+  { id: 'reprint', icon: '🖨️', label: 'Reprint Kontrak' },
 ];
 
 export default function OwnerPage() {
-  const { isOwner } = useAuth();
-  const [tab, setTab] = useState<OwnerTab>('ringkasan');
+  const { isOwner, isAdminOrOwner, user } = useAuth();
+  const role = String(user?.role ?? '').toUpperCase();
+  const isAdmin = role === 'ADMIN';
+  const [tab, setTab] = useState<OwnerTab>(isAdmin ? 'reprint' : 'ringkasan');
 
   // PIN modal shared
   const [pinOpen, setPinOpen] = useState(false);
@@ -35,8 +39,13 @@ export default function OwnerPage() {
     setPinAction(action); setPendingFn(() => fn); setPinOpen(true);
   }
 
-  if (!isOwner) {
-    return <AppShell title="👑 Owner Dashboard" subtitle=""><div style={{ padding: 60, textAlign: 'center', color: 'var(--text3)' }}>⛔ Hanya untuk Owner</div></AppShell>;
+  // Admin can only see Reprint tab; Owner sees all
+  const visibleTabs = isAdmin
+    ? TABS.filter(t => t.id === 'reprint')
+    : TABS;
+
+  if (!isAdminOrOwner) {
+    return <AppShell title="👑 Owner Dashboard" subtitle=""><div style={{ padding: 60, textAlign: 'center', color: 'var(--text3)' }}>⛔ Hanya untuk Admin/Owner</div></AppShell>;
   }
 
   return (
@@ -44,8 +53,8 @@ export default function OwnerPage() {
       <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
         {/* Sidebar tabs */}
         <div style={{ width: 200, minWidth: 200, background: 'var(--surface)', borderRight: '1px solid var(--border)', padding: '16px 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: .8, padding: '4px 12px 8px' }}>Owner Panel</div>
-          {TABS.map(t => (
+          <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: .8, padding: '4px 12px 8px' }}>{isAdmin ? 'Admin Panel' : 'Owner Panel'}</div>
+          {visibleTabs.map(t => (
             <div key={t.id} onClick={() => setTab(t.id)} style={{
               padding: '9px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8,
               color: tab === t.id ? 'var(--accent)' : 'var(--text2)', fontWeight: tab === t.id ? 600 : 400,
@@ -60,6 +69,7 @@ export default function OwnerPage() {
           {tab === 'rak' && <RakTab requestPin={requestPin} />}
           {tab === 'outlet' && <OutletTab requestPin={requestPin} />}
           {tab === 'backup' && <BackupTab />}
+          {tab === 'reprint' && <ReprintTab />}
         </div>
       </div>
 
@@ -462,6 +472,140 @@ function BackupTab() {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// TAB: REPRINT KONTRAK (Admin/Owner)
+// Cermin panel Reprint di ownerdashboard.html GAS
+// ═══════════════════════════════════════════════════════════
+function ReprintTab() {
+  const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState('');
+
+  async function doSearch() {
+    const q = query.trim().toUpperCase();
+    if (!q) { setError('Masukkan No Faktur atau barcode'); return; }
+    setSearching(true); setError(''); setResult(null);
+    try {
+      const res = await fetch(`/api/owner?action=reprint&q=${encodeURIComponent(q)}`);
+      const json = await res.json();
+      if (!json.ok) { setError(json.msg || 'Tidak ditemukan'); setSearching(false); return; }
+      setResult(json);
+    } catch (e) { setError('Error: ' + (e as Error).message); }
+    setSearching(false);
+  }
+
+  function doPrint() {
+    if (!result?.data) return;
+    const d = result.data;
+    const source = result.source;
+
+    if (source === 'SJB') {
+      // SJB: ujrah_persen = lama_titip, ujrah_nominal = harga_buyback (repurposed)
+      printSJB({
+        noSJB: d.no_faktur || '', nama: d.nama || '', noKtp: d.no_ktp || '',
+        telp1: d.telp1 || '', kategori: d.kategori || '', barang: d.barang || '',
+        kelengkapan: d.kelengkapan || '', grade: d.grade || '', imeiSn: d.imei_sn || '',
+        hargaJual: Number(d.harga_jual || d.jumlah_gadai || 0),
+        hargaBuyback: Number(d.harga_buyback || d.ujrah_nominal || 0),
+        lamaTitip: Number(d.lama_titip || d.ujrah_persen || 30),
+        tglJual: d.tgl_gadai || '', tglJT: d.tgl_jt || '',
+        locationGudang: d.rak || '',
+        barcodeA: d.barcode_a || '', barcodeB: d.barcode_b || '',
+        kasir: d.kasir || '', outlet: result.outlet || '',
+        alamat: result.alamat || '', kota: result.kota || '',
+        telpon: result.telpon || '',
+        namaPerusahaan: result.namaPerusahaan || 'PT. ACEH GADAI SYARIAH',
+        waktuOperasional: result.waktuOperasional || '',
+      });
+    } else {
+      printGadai({
+        noFaktur: d.no_faktur || '', tglGadai: d.tgl_gadai || '',
+        tglJT: d.tgl_jt || '', tglSita: d.tgl_sita || '',
+        nama: d.nama || '', noKtp: d.no_ktp || '',
+        telp1: d.telp1 || '', telp2: d.telp2 || '',
+        kategori: d.kategori || '', barang: d.barang || '',
+        kelengkapan: d.kelengkapan || '', grade: d.grade || '',
+        imeiSn: d.imei_sn || '',
+        taksiran: Number(d.taksiran || 0), jumlahGadai: Number(d.jumlah_gadai || 0),
+        biayaAdmin: Number(result.biayaAdmin || 10000),
+        ujrahNominal: Number(d.ujrah_nominal || 0),
+        ujrahPersen: d.ujrah_persen || '',
+        barcodeA: d.barcode_a || '', barcodeB: d.barcode_b || '',
+        locationGudang: d.rak || '',
+        kasir: d.kasir || '', outlet: result.outlet || '',
+        alamat: result.alamat || '', kota: result.kota || '',
+        telpon: result.telpon || '',
+        namaPerusahaan: result.namaPerusahaan || 'PT. ACEH GADAI SYARIAH',
+        waktuOperasional: result.waktuOperasional || '',
+      });
+    }
+  }
+
+  return (
+    <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
+      <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>🖨️ Reprint Surat Kontrak</div>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input value={query} style={{ width: 280, fontFamily: 'var(--mono)' }}
+          onChange={e => setQuery(e.target.value.toUpperCase())}
+          onKeyDown={e => e.key === 'Enter' && doSearch()}
+          placeholder="No Faktur (SBR-1-0001) / barcode" />
+        <button className="btn btn-primary btn-sm" onClick={doSearch} disabled={searching}>
+          {searching ? '⏳' : '🔍 Cari & Cetak'}
+        </button>
+        <span style={{ fontSize: 12, color: 'var(--text3)' }}>
+          Masukkan No Faktur atau scan barcode untuk reprint kontrak gadai / SJB
+        </span>
+      </div>
+
+      {error && <div className="alert-error" style={{ marginBottom: 16 }}>⚠️ {error}</div>}
+
+      {result?.data ? (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20, maxWidth: 600 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>{result.data.no_faktur}</div>
+              <div style={{ fontSize: 11, color: 'var(--text3)' }}>Tipe: {result.source} | Status: {result.data.status}</div>
+            </div>
+            <span className={`badge ${(result.data.status || '').toLowerCase()}`}>{result.data.status}</span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, marginBottom: 16 }}>
+            <div><span style={{ color: 'var(--text3)' }}>Nama</span><br /><b>{result.data.nama}</b></div>
+            <div><span style={{ color: 'var(--text3)' }}>Kategori</span><br />{result.data.kategori}</div>
+            <div><span style={{ color: 'var(--text3)' }}>Barang</span><br />{result.data.barang}</div>
+            <div><span style={{ color: 'var(--text3)' }}>Rak</span><br />{result.data.rak || '—'}</div>
+            <div>
+              <span style={{ color: 'var(--text3)' }}>{result.source === 'SJB' ? 'Harga Jual' : 'Jumlah Pinjaman'}</span><br />
+              {formatRp(result.source === 'SJB' ? (result.data.harga_jual || result.data.jumlah_gadai || 0) : result.data.jumlah_gadai)}
+            </div>
+            <div><span style={{ color: 'var(--text3)' }}>Outlet</span><br />{result.data.outlet || '—'}</div>
+            <div>
+              <span style={{ color: 'var(--text3)' }}>Barcode A</span><br />
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 10 }}>{result.data.barcode_a || '—'}</span>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text3)' }}>Barcode B</span><br />
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 10 }}>{result.data.barcode_b || '—'}</span>
+            </div>
+          </div>
+
+          <button className="btn btn-primary btn-full" onClick={doPrint}>
+            🖨️ Cetak Ulang Kontrak {result.source === 'SJB' ? 'SJB' : 'Gadai'}
+          </button>
+        </div>
+      ) : !error && !searching ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 300, color: 'var(--text3)' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🖨️</div>
+          <div style={{ fontSize: 15, fontWeight: 600 }}>Reprint Surat Kontrak</div>
+          <div style={{ fontSize: 12, marginTop: 8 }}>Masukkan No Faktur lalu klik Cari & Cetak</div>
+        </div>
+      ) : null}
     </div>
   );
 }

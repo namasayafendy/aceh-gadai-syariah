@@ -75,12 +75,14 @@ export default function SJBPage() {
   function requestSubmitAkad() {
     const errs: string[] = [];
     if (!nama.trim()) errs.push('Nama');
+    if (!noKtp.trim()) errs.push('No KTP/NIK');
     if (!telp1.trim()) errs.push('No. HP');
     if (!kategori) errs.push('Kategori');
     if (!barang.trim()) errs.push('Barang');
     if (!hargaJual) errs.push('Harga Jual');
     if (!hargaBuyback) errs.push('Harga Buyback');
     if (errs.length) { setAkadError('Field wajib: ' + errs.join(', ')); return; }
+    if (noKtp.trim().replace(/\D/g, '').length !== 16) { setAkadError('No KTP/NIK harus tepat 16 digit!'); return; }
     if (hargaBuyback <= hargaJual) { setAkadError('Harga Buyback harus > Harga Jual'); return; }
     if (akadPayment === 'SPLIT') {
       const c = parseMoney(akadCashRaw), b = parseMoney(akadBankRaw);
@@ -246,7 +248,7 @@ export default function SJBPage() {
               <input value={nama} onChange={e => setNama(e.target.value.toUpperCase())} placeholder="Nama lengkap" />
             </div>
             <div className="form-row">
-              <div className="form-group"><label>No KTP</label><input value={noKtp} onChange={e => setNoKtp(e.target.value)} maxLength={16} placeholder="16 digit NIK" /></div>
+              <div className="form-group"><label>No KTP/NIK *</label><input value={noKtp} onChange={e => setNoKtp(e.target.value)} maxLength={16} placeholder="16 digit NIK" inputMode="numeric" /></div>
               <div className="form-group"><label>No. HP *</label><input value={telp1} onChange={e => setTelp1(e.target.value)} placeholder="08xx" /></div>
             </div>
             <div className="form-group"><label>No. HP 2</label><input value={telp2} onChange={e => setTelp2(e.target.value)} placeholder="Opsional" /></div>
