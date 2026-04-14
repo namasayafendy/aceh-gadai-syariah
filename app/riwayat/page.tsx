@@ -169,7 +169,12 @@ function RiwayatResult({ data }: { data: any }) {
           <DataRow label="Taksiran" value={formatRp(g.taksiran)} green />
           <DataRow label={isSJB ? 'Harga Jual' : 'Jumlah Gadai'} value={formatRp(g.jumlahGadai)} bold />
           {!isSJB && <DataRow label="Ujrah/Bulan" value={formatRp(g.ujrahNominal)} />}
-          {!isSJB && <DataRow label="Total Tebus (Sistem)" value={formatRp(g.jumlahGadai + g.ujrahNominal)} bold green />}
+          {!isSJB && g.status === 'AKTIF' && (
+            <DataRow label={`Ujrah Berjalan (${g.hariDihitung || 0} hr)`} value={formatRp(g.ujrahBerjalan)} />
+          )}
+          {!isSJB && g.status === 'AKTIF' && (
+            <DataRow label="Total Tebus (Sistem)" value={formatRp(g.totalTebusSistem)} bold green />
+          )}
           {isSJB && <DataRow label="Harga Buyback" value={formatRp(g.hargaBuyback)} bold />}
           {isSJB && <DataRow label="Lama Titip" value={`${g.lamaTitip} hari`} />}
           <DataRow label="Payment" value={g.payment} />

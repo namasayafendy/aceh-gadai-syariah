@@ -41,6 +41,41 @@ export async function POST(request: NextRequest) {
       if (rows && rows.length > 0) {
         const r = rows[0] as any;
         gadaiTipe = 'GADAI';
+        const taksiran = Number(r.taksiran ?? 0);
+        const jmlGadai = Number(r.jumlah_gadai ?? 0);
+        const ujrahSheet = Number(r.ujrah_nominal ?? 0);
+        const kat = String(r.kategori ?? '').toUpperCase();
+        const emasFlag = ['EMAS', 'EMAS PAUN'].includes(kat);
+
+        // Hitung ujrah berjalan real-time (cermin tebus/page.tsx)
+        const tgl1 = new Date(r.tgl_gadai);
+        const now = new Date();
+        const hariAktual = Math.max(1, Math.floor((now.getTime() - tgl1.getTime()) / 86400000));
+        let ujrahBerjalan = 0;
+        let hariDihitung = 0;
+
+        if (ujrahSheet > 0) {
+          if (emasFlag) {
+            hariDihitung = hariAktual;
+            ujrahBerjalan = Math.ceil((ujrahSheet / 30) * hariAktual / 1000) * 1000;
+          } else {
+            hariDihitung = Math.ceil(hariAktual / 5) * 5;
+            const per5 = Math.round(ujrahSheet / 6);
+            ujrahBerjalan = Math.ceil(per5 * (hariDihitung / 5) / 1000) * 1000;
+          }
+        } else {
+          if (emasFlag) {
+            hariDihitung = hariAktual;
+            ujrahBerjalan = Math.round((2.8 / 100 / 30) * taksiran * hariAktual);
+          } else {
+            const persen = jmlGadai <= 3000000 ? 8 : 7;
+            hariDihitung = Math.ceil(hariAktual / 5) * 5;
+            ujrahBerjalan = Math.round((persen / 100 / 30) * 5 * taksiran * (hariDihitung / 5));
+          }
+        }
+
+        const totalTebusSistem = Math.ceil((jmlGadai + ujrahBerjalan) / 1000) * 1000;
+
         gadaiData = {
           tipe: 'GADAI',
           noFaktur: r.no_faktur,
@@ -53,10 +88,15 @@ export async function POST(request: NextRequest) {
           barang: r.barang,
           kelengkapan: r.kelengkapan,
           grade: r.grade,
-          taksiran: Number(r.taksiran ?? 0),
-          jumlahGadai: Number(r.jumlah_gadai ?? 0),
+          taksiran,
+          jumlahGadai: jmlGadai,
           ujrahPersen: Number(r.ujrah_persen ?? 0),
-          ujrahNominal: Number(r.ujrah_nominal ?? 0),
+          ujrahNominal: ujrahSheet,
+          // Real-time calculation
+          hariAktual,
+          hariDihitung,
+          ujrahBerjalan,
+          totalTebusSistem,
           payment: r.payment,
           kasir: r.kasir,
           outlet: r.outlet,
