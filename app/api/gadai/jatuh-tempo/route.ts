@@ -2,6 +2,7 @@
 // ACEH GADAI SYARIAH - Jatuh Tempo API
 // File: app/api/gadai/jatuh-tempo/route.ts
 // GET: list semua kontrak AKTIF dari tb_gadai + tb_sjb
+// Include: tgl_sita, telp1, telp2, ujrah fields untuk kalkulasi
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -19,26 +20,30 @@ export async function GET(request: NextRequest) {
       outletFilter = outlet ? String((outlet as any).nama) : '';
     }
 
-    // Query tb_gadai AKTIF
+    // Query tb_gadai AKTIF — include tgl_sita, telp2, ujrah fields
     let gadaiQ = db.from('tb_gadai')
-      .select('id,no_faktur,nama,telp1,kategori,barang,taksiran,jumlah_gadai,tgl_gadai,tgl_jt,outlet,barcode_a,status')
+      .select('id,no_faktur,nama,telp1,telp2,kategori,barang,taksiran,jumlah_gadai,ujrah_persen,ujrah_nominal,tgl_gadai,tgl_jt,tgl_sita,outlet,barcode_a,status')
       .eq('status', 'AKTIF');
     if (outletFilter) gadaiQ = gadaiQ.eq('outlet', outletFilter);
     const { data: gadaiRows } = await gadaiQ;
 
-    // Query tb_sjb AKTIF
+    // Query tb_sjb AKTIF — include lama_titip, harga_buyback
     let sjbQ = db.from('tb_sjb')
-      .select('id,no_faktur,nama,telp1,kategori,barang,taksiran,harga_jual,tgl_gadai,tgl_jt,outlet,barcode_a,status')
+      .select('id,no_faktur,nama,telp1,telp2,kategori,barang,taksiran,harga_jual,harga_buyback,lama_titip,tgl_gadai,tgl_jt,tgl_sita,outlet,barcode_a,status')
       .in('status', ['AKTIF', 'BERJALAN']);
     if (outletFilter) sjbQ = sjbQ.eq('outlet', outletFilter);
     const { data: sjbRows } = await sjbQ;
 
-    const rows = [
-      ...(gadaiRows ?? []).map((r: any) => ({ ...r, _source: 'GADAI', jumlah_gadai: r.jumlah_gadai })),
-      ...(sjbRows ?? []).map((r: any) => ({ ...r, _source: 'SJB', jumlah_gadai: r.harga_jual })),
-    ];
+    // Map rows with _source identifier
+    const gadai = (gadaiRows ?? []).map((r: any) => ({
+      ...r, _source: 'GADAI',
+    }));
+    const sjb = (sjbRows ?? []).map((r: any) => ({
+      ...r, _source: 'SJB',
+      jumlah_gadai: r.harga_jual, // normalize for display
+    }));
 
-    return NextResponse.json({ ok: true, rows });
+    return NextResponse.json({ ok: true, gadai, sjb });
   } catch (err) {
     console.error('[gadai/jatuh-tempo]', err);
     return NextResponse.json({ ok: false, msg: 'Server error.' }, { status: 500 });
