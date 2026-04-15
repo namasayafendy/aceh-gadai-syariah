@@ -18,13 +18,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0f1117] to-[#1a1d2e] px-4">
-      <Suspense fallback={null}>
-        <LoginForm
-          error={params.error}
-          redirectTo={params.redirect}
-        />
-      </Suspense>
-    </div>
+    <Suspense fallback={null}>
+      <LoginForm
+        error={params.error}
+        redirectTo={params.redirect}
+      />
+    </Suspense>
   );
 }

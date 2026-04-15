@@ -145,10 +145,13 @@ export async function POST(request: NextRequest) {
       const { id, nama, username, pin: kPin, role, outlet_id, status } = body;
       if (!nama) return NextResponse.json({ ok: false, msg: 'Nama wajib.' });
 
+      // outlet_id: 0 = semua outlet (untuk ADMIN/OWNER), N = outlet spesifik
+      const oid = outlet_id !== undefined && outlet_id !== '' ? parseInt(outlet_id) : 1;
+
       if (id) {
         await db.from('karyawan').update({
           nama, username: username || null, pin: kPin || null,
-          role: role || 'KASIR', outlet_id: parseInt(outlet_id) || 1,
+          role: role || 'KASIR', outlet_id: oid,
           status: status || 'AKTIF',
         }).eq('id', id);
       } else {
@@ -156,7 +159,7 @@ export async function POST(request: NextRequest) {
         await db.from('karyawan').insert({
           id: newId, nama, username: username || null,
           pin: kPin || null, role: role || 'KASIR',
-          outlet_id: parseInt(outlet_id) || 1, status: 'AKTIF',
+          outlet_id: oid, status: 'AKTIF',
         });
       }
       await db.from('audit_log').insert({

@@ -215,7 +215,7 @@ function KaryawanTab({ requestPin }: { requestPin: (a: string, fn: (pin: string)
                   <option value="KASIR">KASIR</option><option value="ADMIN">ADMIN</option><option value="OWNER">OWNER</option>
                 </select>
               </div>
-              <div className="form-group"><label>Outlet ID</label><input type="number" value={editing.outlet_id} onChange={e => setEditing({ ...editing, outlet_id: parseInt(e.target.value) || 0 })} /><div className="hint">0 = semua outlet</div></div>
+              <div className="form-group"><label>Outlet ID</label><input type="number" min="0" value={editing.outlet_id} onChange={e => setEditing({ ...editing, outlet_id: parseInt(e.target.value ?? '0') })} /><div className="hint">0 = semua outlet (ADMIN/OWNER)</div></div>
               <div className="form-group"><label>Status</label>
                 <select value={editing.status} onChange={e => setEditing({ ...editing, status: e.target.value })}>
                   <option value="AKTIF">AKTIF</option><option value="NONAKTIF">NONAKTIF</option>
