@@ -599,7 +599,7 @@ function OutletTab({ requestPin }: { requestPin: (a: string, fn: (pin: string) =
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 12 }}>
               <div><span style={{ color: 'var(--text3)' }}>Alamat</span><br />{o.alamat || '—'}</div>
               <div><span style={{ color: 'var(--text3)' }}>Kota</span><br />{o.kota || '—'}</div>
-              <div><span style={{ color: 'var(--text3)' }}>Telpon</span><br />{o.telpon || '—'}</div>
+              <div><span style={{ color: 'var(--text3)' }}>Telpon</span><br />{o.telepon || o.telpon || '—'}</div>
               <div><span style={{ color: 'var(--text3)' }}>Admin</span><br />Rp {(o.biaya_admin || 10000).toLocaleString('id-ID')}</div>
               <div style={{ gridColumn: 'span 2' }}><span style={{ color: 'var(--text3)' }}>Operasional</span><br />{o.waktu_operasional || '—'}</div>
             </div>
