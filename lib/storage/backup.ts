@@ -49,7 +49,7 @@ export async function uploadKontrak(
   html:       string
 ): Promise<{ ok: boolean; path?: string; error?: string }> {
   const path = `${outletName}/${monthFolder()}/kontrak/${noFaktur}_${stamp()}.html`;
-  return doUpload(db, path, html, 'text/html; charset=utf-8');
+  return doUpload(db, path, html, 'text/html');
 }
 
 // ─── Upload laporan malam HTML ────────────────────────────────
@@ -61,7 +61,7 @@ export async function uploadLaporanMalam(
 ): Promise<{ ok: boolean; path?: string; error?: string }> {
   const month = tgl.substring(0, 7);
   const path  = `${outletName}/${month}/laporan/laporan_malam_${tgl}.html`;
-  return doUpload(db, path, html, 'text/html; charset=utf-8');
+  return doUpload(db, path, html, 'text/html');
 }
 
 // ─── Upload backup JSON semua tabel ──────────────────────────
@@ -73,7 +73,7 @@ export async function uploadDataBackup(
 ): Promise<{ ok: boolean; path?: string; error?: string }> {
   const month = tgl.substring(0, 7);
   const path  = `${outletName}/${month}/data/backup_${tgl}.json`;
-  return doUpload(db, path, json, 'application/json; charset=utf-8');
+  return doUpload(db, path, json, 'application/json');
 }
 
 // ─── List backup files per outlet per bulan ──────────────────
