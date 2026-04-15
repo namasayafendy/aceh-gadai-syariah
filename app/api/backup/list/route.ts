@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
+import { runNightlyBackup } from '@/lib/backup/runBackup';
 
 const BUCKET = 'backups';
 
@@ -88,7 +89,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Manual backup trigger (proxy to /api/backup/nightly)
+// Manual backup trigger — panggil runNightlyBackup() langsung (tanpa self-fetch)
 export async function POST(request: NextRequest) {
   try {
     const db = await createServiceClient();
@@ -105,21 +106,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, msg: 'Hanya Admin/Owner.' });
     }
 
-    // Call nightly backup endpoint internally
-    const cronSecret = process.env.CRON_SECRET;
-    if (!cronSecret) return NextResponse.json({ ok: false, msg: 'CRON_SECRET belum di-set.' });
-
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
-      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
-
-    const res = await fetch(`${baseUrl}/api/backup/nightly`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${cronSecret}` },
-    });
-    const json = await res.json();
-    return NextResponse.json(json);
+    // Jalankan backup langsung (tidak pakai self-fetch)
+    const result = await runNightlyBackup(db);
+    return NextResponse.json(result);
   } catch (err) {
     console.error('[backup/list POST]', err);
-    return NextResponse.json({ ok: false, msg: 'Server error.' }, { status: 500 });
+    return NextResponse.json({ ok: false, msg: 'Server error: ' + String(err) }, { status: 500 });
   }
 }
