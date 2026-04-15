@@ -165,7 +165,7 @@ function KaryawanTab({ requestPin }: { requestPin: (a: string, fn: (pin: string)
     requestPin(`Simpan karyawan ${editing.nama}`, async (pin) => {
       const res = await fetch('/api/owner', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'karyawan-save', pin, ...editing }),
+        body: JSON.stringify({ action: 'karyawan-save', ...editing, pin, kPin: editing.pin }),
       });
       const json = await res.json();
       if (json.ok) { setEditing(null); setMsg(''); load(); }

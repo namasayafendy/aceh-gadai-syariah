@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
 
     // ── Karyawan: add/edit/toggle ──────────────────────────
     if (action === 'karyawan-save') {
-      const { id, nama, username, pin: kPin, role, outlet_id, status } = body;
+      const { id, nama, username, kPin, role, outlet_id, status } = body;
       if (!nama) return NextResponse.json({ ok: false, msg: 'Nama wajib.' });
 
       // outlet_id: 0 = semua outlet (untuk ADMIN/OWNER), N = outlet spesifik
