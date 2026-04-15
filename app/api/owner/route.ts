@@ -214,7 +214,12 @@ export async function POST(request: NextRequest) {
       const { nama, alamat, kota, telpon, waktu_operasional, nama_perusahaan } = body;
       if (!nama) return NextResponse.json({ ok: false, msg: 'Nama outlet wajib.' });
 
+      // Generate next outlet ID (outlets.id is NOT auto-increment)
+      const { data: maxRow } = await db.from('outlets').select('id').order('id', { ascending: false }).limit(1).single();
+      const nextId = maxRow ? ((maxRow as any).id + 1) : 1;
+
       const { error } = await db.from('outlets').insert({
+        id: nextId,
         nama: nama.toUpperCase(), alamat: alamat || '', kota: kota || '',
         telepon: telpon || '', waktu_operasional: waktu_operasional || '',
         nama_perusahaan: nama_perusahaan || 'PT. ACEH GADAI SYARIAH',
@@ -222,12 +227,31 @@ export async function POST(request: NextRequest) {
       });
       if (error) return NextResponse.json({ ok: false, msg: error.message });
 
+      // ── Buat counter entries untuk outlet baru ────────────
+      // Supaya semua fungsi (gadai, tebus, sjb, kas, dll) langsung jalan
+      const counterTypes = [
+        { label: 'SBR',   prefix: `SBR-${nextId}-` },
+        { label: 'GADAI', prefix: `GDI-${nextId}-` },
+        { label: 'KAS',   prefix: `KAS-${nextId}-` },
+        { label: 'TEBUS', prefix: `TBS-${nextId}-` },
+        { label: 'SJB',   prefix: `SJB-${nextId}-` },
+        { label: 'BA',    prefix: `BA-${nextId}-` },
+        { label: 'ASET',  prefix: `AST-${nextId}-` },
+        { label: 'BARCODE', prefix: `BC${nextId}` },
+      ];
+      for (const ct of counterTypes) {
+        await db.from('counter').insert({
+          label: ct.label, prefix: ct.prefix,
+          last_val: 0, outlet_id: nextId,
+        });
+      }
+
       await db.from('audit_log').insert({
-        user_nama: kasir, tabel: 'outlets', record_id: nama,
+        user_nama: kasir, tabel: 'outlets', record_id: String(nextId),
         aksi: 'INSERT', field: 'ALL',
-        nilai_baru: JSON.stringify({ nama, alamat, kota }),
+        nilai_baru: JSON.stringify({ id: nextId, nama, alamat, kota }),
       });
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, msg: `Outlet "${nama.toUpperCase()}" (ID: ${nextId}) berhasil ditambahkan.` });
     }
 
     // ── Akun Login: create new email login ──────────────────
