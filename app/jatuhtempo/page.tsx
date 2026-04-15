@@ -84,6 +84,78 @@ function mapRow(r: any): JTRow {
   return { ...r, _jtStatus: status, _sisaHari: sisa, _lamaHari: lama, _totalBayar: totalBayar };
 }
 
+// ── Print: hanya data LEWAT WAKTU ─────────────────────────────
+function printLewatWaktu(gadai: JTRow[], sjb: JTRow[]) {
+  const R = (v: number) => 'Rp ' + (v || 0).toLocaleString('id-ID');
+  const fD = (d: string) => d ? new Date(d).toLocaleDateString('id-ID') : '—';
+  const tgl = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+
+  const lwGadai = gadai.filter(r => r._jtStatus === 'LEWAT WAKTU');
+  const lwSjb = sjb.filter(r => r._jtStatus === 'LEWAT WAKTU');
+
+  function rows(list: JTRow[]) {
+    if (list.length === 0) return '<tr><td colspan="11" style="padding:12px;text-align:center;color:#888">Tidak ada</td></tr>';
+    return list.map((r, i) =>
+      `<tr style="border-bottom:1px solid #ddd">
+        <td>${i + 1}</td>
+        <td style="font-family:monospace">${r.no_faktur}</td>
+        <td>${r.nama}</td>
+        <td style="font-size:9px">${r.telp1 || '—'}${r.telp2 ? '<br>' + r.telp2 : ''}</td>
+        <td>${r.barang}</td>
+        <td class="num">${R(r.jumlah_gadai)}</td>
+        <td class="num" style="font-weight:bold">${R(r._totalBayar)}</td>
+        <td style="text-align:center">${r._lamaHari} hr</td>
+        <td>${fD(r.tgl_jt)}</td>
+        <td>${fD(r.tgl_sita)}</td>
+        <td class="num" style="color:red;font-weight:bold">${Math.abs(r._sisaHari)} hr lewat</td>
+      </tr>`
+    ).join('');
+  }
+
+  const thRow = `<tr style="background:#f0f0f0">
+    <th>No</th><th>No Faktur</th><th>Nama</th><th>No HP</th><th>Barang</th>
+    <th class="num">Pinjaman</th><th class="num">Total Bayar</th><th>Lama</th>
+    <th>Tgl JT</th><th>Tgl Sita</th><th class="num">Lewat</th>
+  </tr>`;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Lewat Waktu ${new Date().toLocaleDateString('sv-SE')}</title>
+    <style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:Arial,sans-serif;font-size:10px;padding:10mm}
+      table{width:100%;border-collapse:collapse;margin-bottom:12px}
+      th,td{padding:4px 6px;border:1px solid #ccc;text-align:left;vertical-align:top}
+      th{font-weight:bold;font-size:9px}
+      .num{text-align:right}
+      h2{margin-bottom:4px;font-size:14px}
+      h3{margin:12px 0 4px;font-size:11px;border-bottom:2px solid #dc2626;padding-bottom:3px;color:#dc2626}
+      .noprint{margin-bottom:8px}
+      @media print{.noprint{display:none}}
+    </style></head><body>
+    <div class="noprint">
+      <button onclick="window.print()" style="padding:5px 14px;margin-right:6px">Print</button>
+      <button onclick="window.close()">Tutup</button>
+    </div>
+    <h2>DAFTAR KONTRAK LEWAT WAKTU</h2>
+    <p style="margin-bottom:10px;color:#555">${tgl} &mdash; Total: ${lwGadai.length + lwSjb.length} kontrak (Gadai: ${lwGadai.length}, SJB: ${lwSjb.length})</p>
+
+    <h3>GADAI (${lwGadai.length})</h3>
+    <table>${thRow}<tbody>${rows(lwGadai)}</tbody></table>
+
+    <h3>JUAL TITIP / SJB (${lwSjb.length})</h3>
+    <table>${thRow}<tbody>${rows(lwSjb)}</tbody></table>
+
+    <p style="margin-top:16px;font-size:9px;color:#888">Dicetak: ${new Date().toLocaleString('id-ID')}</p>
+  </body></html>`;
+
+  const win = window.open('', '_blank', 'width=1000,height=800,scrollbars=yes');
+  if (!win) { alert('Izinkan popup untuk mencetak.'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 600);
+}
+
 export default function JatuhTempoPage() {
   const outletId = useOutletId();
   const [gadaiRows, setGadaiRows] = useState<JTRow[]>([]);
@@ -201,6 +273,11 @@ export default function JatuhTempoPage() {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari nama / no faktur / barang / no hp..."
             style={{ width: 300, padding: '7px 12px', fontSize: 12 }} />
           <button className="btn btn-outline btn-sm" onClick={loadData}>Refresh</button>
+          {cntLewat > 0 && (
+            <button className="btn btn-danger btn-sm" onClick={() => printLewatWaktu(gadaiRows, sjbRows)}>
+              Cetak Lewat Waktu ({cntLewat})
+            </button>
+          )}
         </div>
 
         {/* Stats */}
