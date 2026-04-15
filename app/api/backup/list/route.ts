@@ -109,8 +109,8 @@ export async function POST(request: NextRequest) {
     const cronSecret = process.env.CRON_SECRET;
     if (!cronSecret) return NextResponse.json({ ok: false, msg: 'CRON_SECRET belum di-set.' });
 
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
     const res = await fetch(`${baseUrl}/api/backup/nightly`, {
       method: 'POST',

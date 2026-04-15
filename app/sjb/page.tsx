@@ -534,31 +534,38 @@ export default function SJBPage() {
             </div>
             <div className="success-actions">
               {/* BUG FIX 1+2: pakai data dari akadSuccess (API response), BUKAN form state yg sudah di-reset */}
-              <button className="btn btn-primary btn-full" onClick={() => printSJB({
-                noSJB: akadSuccess.noSJB || '',
-                nama: akadSuccess.nama || '',
-                noKtp: akadSuccess.noKtp || '',
-                telp1: akadSuccess.telp1 || '',
-                kategori: akadSuccess.kategori || '',
-                barang: akadSuccess.barang || '',
-                kelengkapan: akadSuccess.kelengkapan || '',
-                grade: akadSuccess.grade || '',
-                imeiSn: akadSuccess.imeiSn || '',
-                hargaJual: akadSuccess.hargaJual || 0,
-                hargaBuyback: akadSuccess.hargaBuyback || 0,
-                lamaTitip: akadSuccess.lamaTitip || 30,
-                tglJual: akadSuccess.tglJual || '',
-                tglJT: akadSuccess.tglJT || '',
-                barcodeA: akadSuccess.barcodeA || '',
-                barcodeB: akadSuccess.barcodeB || '',
-                kasir: akadSuccess.kasir || '',
-                outlet: akadSuccess.outlet || '',
-                alamat: akadSuccess.alamat || '',
-                kota: akadSuccess.kota || '',
-                telpon: akadSuccess.telpon || '',
-                namaPerusahaan: akadSuccess.namaPerusahaan || 'PT. ACEH GADAI SYARIAH',
-                locationGudang: akadSuccess.locationGudang || '',
-              })}>🖨️ Cetak Kontrak</button>
+              <button className="btn btn-primary btn-full" onClick={() => {
+                printSJB({
+                  noSJB: akadSuccess.noSJB || '',
+                  nama: akadSuccess.nama || '',
+                  noKtp: akadSuccess.noKtp || '',
+                  telp1: akadSuccess.telp1 || '',
+                  kategori: akadSuccess.kategori || '',
+                  barang: akadSuccess.barang || '',
+                  kelengkapan: akadSuccess.kelengkapan || '',
+                  grade: akadSuccess.grade || '',
+                  imeiSn: akadSuccess.imeiSn || '',
+                  hargaJual: akadSuccess.hargaJual || 0,
+                  hargaBuyback: akadSuccess.hargaBuyback || 0,
+                  lamaTitip: akadSuccess.lamaTitip || 30,
+                  tglJual: akadSuccess.tglJual || '',
+                  tglJT: akadSuccess.tglJT || '',
+                  barcodeA: akadSuccess.barcodeA || '',
+                  barcodeB: akadSuccess.barcodeB || '',
+                  kasir: akadSuccess.kasir || '',
+                  outlet: akadSuccess.outlet || '',
+                  alamat: akadSuccess.alamat || '',
+                  kota: akadSuccess.kota || '',
+                  telpon: akadSuccess.telpon || '',
+                  namaPerusahaan: akadSuccess.namaPerusahaan || 'PT. ACEH GADAI SYARIAH',
+                  locationGudang: akadSuccess.locationGudang || '',
+                });
+                // Backup kontrak ke Supabase Storage (fire-and-forget)
+                fetch('/api/backup/kontrak', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json', 'x-outlet-id': String(outletId) },
+                  body: JSON.stringify({ tipe: 'SJB', noFaktur: akadSuccess.noSJB || '', ...akadSuccess }),
+                }).catch(() => {});
+              }}>Cetak Kontrak</button>
               <button className="btn btn-outline btn-full" onClick={() => setAkadSuccess(null)}>Tutup</button>
             </div>
           </div>
@@ -601,7 +608,12 @@ export default function SJBPage() {
                   // Cetak Nota = HANYA nota + surat diskon + surat kehilangan, TANPA kontrak baru
                   cetakKontrak: false,
                 });
-              }}>🖨️ Cetak Nota</button>
+                // Backup nota ke Supabase Storage (fire-and-forget)
+                fetch('/api/backup/kontrak', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json', 'x-outlet-id': String(outletId) },
+                  body: JSON.stringify({ tipe: 'BUYBACK', noFaktur: bbSuccess.noSJB || bbSuccess._noSJB || '', ...bbSuccess }),
+                }).catch(() => {});
+              }}>Cetak Nota</button>
               {bbSuccess.status === 'PERPANJANG' && (
                 <button className="btn btn-outline btn-full" onClick={() => {
                   // Cetak kontrak baru saja (tanpa nota)

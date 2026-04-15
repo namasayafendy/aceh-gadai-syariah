@@ -715,7 +715,12 @@ export default function TebusPage() {
                   jumlahGadaiBaru: p.jumlahGadaiBaru || 0,
                   ujrahBaru: p.ujrahBaru || 0,
                 });
-              }}>🖨️ Cetak</button>
+                // Backup kontrak ke Supabase Storage (fire-and-forget)
+                fetch('/api/backup/kontrak', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json', 'x-outlet-id': String(outletId) },
+                  body: JSON.stringify({ tipe: successData.status || 'TEBUS', noFaktur: p.noFaktur || '', ...p }),
+                }).catch(() => {});
+              }}>Cetak</button>
               <button className="btn btn-outline btn-full" onClick={() => setSuccessData(null)}>Tutup</button>
             </div>
           </div>

@@ -236,7 +236,15 @@ export default function GadaiPage() {
           <div className="check">✅</div><h3>Gadai Berhasil Disimpan!</h3>
           <div className="info-grid">{[['No Faktur',successData.noFaktur],['Tgl Gadai',successData.tglGadai],['Jatuh Tempo',successData.tglJT],['Tgl Sita',successData.tglSita],['Rak',successData.locationGudang||'—'],['Kasir',successData.kasir]].map(([l,v])=><div className="info-row" key={l}><span className="info-label">{l}</span><span className="info-val">{v||'—'}</span></div>)}</div>
           <div className="success-actions">
-            <button className="btn btn-primary btn-full" onClick={() => printGadai({ ...successData, ujrahNominal: successData.ujrahNominal || ujrahNominal, ujrahPersen: successData.ujrahPersen || ujrahPersen, biayaAdmin: 10000 })}>🖨️ Cetak Surat</button>
+            <button className="btn btn-primary btn-full" onClick={() => {
+              const printData = { ...successData, ujrahNominal: successData.ujrahNominal || ujrahNominal, ujrahPersen: successData.ujrahPersen || ujrahPersen, biayaAdmin: 10000 };
+              printGadai(printData);
+              // Backup kontrak ke Supabase Storage (fire-and-forget)
+              fetch('/api/backup/kontrak', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'x-outlet-id': String(outletId) },
+                body: JSON.stringify({ tipe: 'GADAI', noFaktur: successData.noFaktur, ...printData }),
+              }).catch(() => {});
+            }}>Cetak Surat</button>
             <button className="btn btn-outline btn-full" onClick={() => setSuccessData(null)}>Tutup</button>
           </div>
         </div></div>
