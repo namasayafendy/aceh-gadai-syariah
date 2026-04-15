@@ -23,8 +23,14 @@ export default function OutletSettingsPage() {
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<Outlet | null>(null);
   const [pinOpen, setPinOpen] = useState(false);
+  const [pinMode, setPinMode] = useState<'edit' | 'delete'>('edit');
   const [msg, setMsg] = useState('');
   const [msgType, setMsgType] = useState<'ok' | 'err'>('ok');
+
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<Outlet | null>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   async function loadOutlets() {
     setLoading(true);
@@ -45,7 +51,54 @@ export default function OutletSettingsPage() {
 
   function requestSave() {
     if (!editing) return;
+    setPinMode('edit');
     setPinOpen(true);
+  }
+
+  // ── Delete flow ─────────────────────────────────────────────
+  function startDelete(o: Outlet) {
+    setDeleteTarget(o);
+    setDeleteConfirmName('');
+    setMsg('');
+  }
+
+  function requestDelete() {
+    if (!deleteTarget) return;
+    if (deleteConfirmName.trim().toUpperCase() !== deleteTarget.nama.toUpperCase()) {
+      setMsg(`Ketik nama outlet "${deleteTarget.nama}" untuk konfirmasi.`);
+      setMsgType('err');
+      return;
+    }
+    setPinMode('delete');
+    setPinOpen(true);
+  }
+
+  async function doDelete(pin: string) {
+    setPinOpen(false);
+    if (!deleteTarget) return;
+    setDeleting(true); setMsg('');
+    try {
+      const res = await fetch('/api/outlet', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'x-outlet-id': String(outletId) },
+        body: JSON.stringify({
+          pin,
+          outletId: deleteTarget.id,
+          confirmNama: deleteConfirmName.trim(),
+        }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setMsg(json.msg || 'Outlet berhasil dihapus.');
+        setMsgType('ok');
+        setDeleteTarget(null);
+        loadOutlets();
+      } else {
+        setMsg(json.msg || 'Gagal hapus outlet.');
+        setMsgType('err');
+      }
+    } catch (e) { setMsg('Error: ' + (e as Error).message); setMsgType('err'); }
+    setDeleting(false);
   }
 
   async function doSave(pin: string) {
@@ -91,7 +144,12 @@ export default function OutletSettingsPage() {
                   <div style={{ fontSize: 16, fontWeight: 700 }}>{o.nama}</div>
                   <div style={{ fontSize: 11, color: 'var(--text3)' }}>ID: {o.id}</div>
                 </div>
-                <button className="btn btn-outline btn-sm" onClick={() => startEdit(o)}>✏️ Edit</button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-outline btn-sm" onClick={() => startEdit(o)}>Edit</button>
+                  {outlets.length > 1 && (
+                    <button className="btn btn-danger btn-sm" onClick={() => startDelete(o)}>Hapus</button>
+                  )}
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12 }}>
@@ -133,8 +191,56 @@ export default function OutletSettingsPage() {
           </div>
         )}
 
-        <PinModal open={pinOpen} action={`Edit Outlet ${editing?.nama || ''}`}
-          onSuccess={(pin) => doSave(pin)} onCancel={() => setPinOpen(false)} />
+        {/* Delete Confirmation Modal */}
+        {deleteTarget && (
+          <div className="pin-overlay" onClick={() => setDeleteTarget(null)}>
+            <div style={{ background: 'var(--surface)', border: '2px solid var(--red)', borderRadius: 16, padding: 24, width: 460, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--red)', marginBottom: 12 }}>
+                Hapus Outlet: {deleteTarget.nama}
+              </div>
+
+              <div style={{ background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 8, padding: 12, fontSize: 12, color: '#dc2626', marginBottom: 14, lineHeight: 1.6 }}>
+                <b>PERINGATAN:</b> Ini akan menghapus PERMANEN:<br />
+                - Semua data gadai outlet ini<br />
+                - Semua data SJB, tebus, buyback<br />
+                - Semua entri kas<br />
+                - Semua data gudang sita & aset<br />
+                - Semua karyawan outlet ini<br />
+                - Outlet itu sendiri<br /><br />
+                Sistem akan backup otomatis sebelum menghapus.<br />
+                <b>Aksi ini TIDAK BISA DI-UNDO.</b>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 11, color: 'var(--red)', fontWeight: 700 }}>
+                  Ketik "{deleteTarget.nama}" untuk konfirmasi
+                </label>
+                <input
+                  value={deleteConfirmName}
+                  onChange={e => setDeleteConfirmName(e.target.value.toUpperCase())}
+                  placeholder={deleteTarget.nama}
+                  style={{ borderColor: 'var(--red)' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className="btn btn-danger btn-full"
+                  onClick={requestDelete}
+                  disabled={deleting || deleteConfirmName.trim().toUpperCase() !== deleteTarget.nama.toUpperCase()}
+                >
+                  {deleting ? 'Menghapus...' : 'Hapus Outlet Permanen'}
+                </button>
+                <button className="btn btn-outline btn-full" onClick={() => setDeleteTarget(null)}>Batal</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <PinModal open={pinOpen}
+          action={pinMode === 'delete' ? `HAPUS Outlet ${deleteTarget?.nama || ''}` : `Edit Outlet ${editing?.nama || ''}`}
+          onSuccess={(pin) => pinMode === 'delete' ? doDelete(pin) : doSave(pin)}
+          onCancel={() => setPinOpen(false)} />
       </div>
     </AppShell>
   );

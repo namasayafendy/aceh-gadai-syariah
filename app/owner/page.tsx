@@ -13,11 +13,12 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { formatRp, formatDate } from '@/lib/format';
 import { printGadai, printSJB } from '@/lib/print';
 
-type OwnerTab = 'ringkasan' | 'karyawan' | 'rak' | 'outlet' | 'backup' | 'reprint';
+type OwnerTab = 'ringkasan' | 'karyawan' | 'akun-login' | 'rak' | 'outlet' | 'backup' | 'reprint';
 
 const TABS: { id: OwnerTab; icon: string; label: string }[] = [
   { id: 'ringkasan', icon: '📊', label: 'Ringkasan' },
   { id: 'karyawan', icon: '👥', label: 'Karyawan' },
+  { id: 'akun-login', icon: '🔐', label: 'Akun Login' },
   { id: 'rak', icon: '📦', label: 'Rak Gudang' },
   { id: 'outlet', icon: '🏢', label: 'Outlet' },
   { id: 'backup', icon: '💾', label: 'Backup Status' },
@@ -66,6 +67,7 @@ export default function OwnerPage() {
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {tab === 'ringkasan' && <RingkasanTab />}
           {tab === 'karyawan' && <KaryawanTab requestPin={requestPin} />}
+          {tab === 'akun-login' && <AkunLoginTab requestPin={requestPin} />}
           {tab === 'rak' && <RakTab requestPin={requestPin} />}
           {tab === 'outlet' && <OutletTab requestPin={requestPin} />}
           {tab === 'backup' && <BackupTab />}
@@ -226,6 +228,214 @@ function KaryawanTab({ requestPin }: { requestPin: (a: string, fn: (pin: string)
               <button className="btn btn-outline btn-full" onClick={() => { setEditing(null); setMsg(''); }}>Batal</button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// TAB: AKUN LOGIN (OWNER only)
+// Manage email/password login accounts (profiles + auth.users)
+// ═══════════════════════════════════════════════════════════
+function AkunLoginTab({ requestPin }: { requestPin: (a: string, fn: (pin: string) => void) => void }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [outlets, setOutlets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<'list' | 'add' | 'edit'>('list');
+  const [editing, setEditing] = useState<any>(null);
+  const [msg, setMsg] = useState('');
+  const [msgType, setMsgType] = useState<'ok' | 'err'>('ok');
+
+  // New account fields
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newNama, setNewNama] = useState('');
+  const [newRole, setNewRole] = useState('KASIR');
+  const [newOutletId, setNewOutletId] = useState(1);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [akunRes, outletRes] = await Promise.all([
+      fetch('/api/owner?action=akun-login'),
+      fetch('/api/outlet'),
+    ]);
+    const akunJson = await akunRes.json();
+    const outletJson = await outletRes.json();
+    if (akunJson.ok) setRows(akunJson.rows || []);
+    if (outletJson.ok) setOutlets(outletJson.rows || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function getOutletName(oid: number) {
+    if (oid === 0) return 'SEMUA OUTLET';
+    const o = outlets.find((x: any) => x.id === oid);
+    return o ? o.nama : `Outlet ${oid}`;
+  }
+
+  // ── Create new account ────────────────────────────────────
+  function doCreate() {
+    if (!newEmail.trim()) { setMsg('Email wajib diisi.'); setMsgType('err'); return; }
+    if (!newPassword || newPassword.length < 6) { setMsg('Password minimal 6 karakter.'); setMsgType('err'); return; }
+    if (!newNama.trim()) { setMsg('Nama wajib diisi.'); setMsgType('err'); return; }
+
+    requestPin(`Buat akun login ${newEmail}`, async (pin) => {
+      setMsg(''); setMsgType('ok');
+      const res = await fetch('/api/owner', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'akun-login-create', pin,
+          email: newEmail.trim(), password: newPassword,
+          nama: newNama.trim(), role: newRole, outlet_id: newRole === 'KASIR' ? newOutletId : 0,
+        }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setMsg(json.msg || 'Akun berhasil dibuat.'); setMsgType('ok');
+        setMode('list'); setNewEmail(''); setNewPassword(''); setNewNama(''); setNewRole('KASIR'); setNewOutletId(1);
+        load();
+      } else { setMsg(json.msg || 'Gagal'); setMsgType('err'); }
+    });
+  }
+
+  // ── Edit existing profile ─────────────────────────────────
+  function doEdit() {
+    if (!editing) return;
+    requestPin(`Edit akun ${editing.email}`, async (pin) => {
+      const res = await fetch('/api/owner', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'akun-login-edit', pin, id: editing.id,
+          nama: editing.nama, role: editing.role,
+          outlet_id: editing.role === 'KASIR' ? editing.outlet_id : 0,
+          status: editing.status,
+        }),
+      });
+      const json = await res.json();
+      if (json.ok) { setMsg('Berhasil disimpan.'); setMsgType('ok'); setMode('list'); setEditing(null); load(); }
+      else { setMsg(json.msg || 'Gagal'); setMsgType('err'); }
+    });
+  }
+
+  // ── Delete account ────────────────────────────────────────
+  function doDelete(row: any) {
+    if (!confirm(`YAKIN hapus akun login ${row.email}?\n\nAkun ini tidak akan bisa login lagi.\nTIDAK BISA DI-UNDO.`)) return;
+    requestPin(`HAPUS akun ${row.email}`, async (pin) => {
+      const res = await fetch('/api/owner', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'akun-login-delete', pin, id: row.id }),
+      });
+      const json = await res.json();
+      if (json.ok) { setMsg(json.msg || 'Akun dihapus.'); setMsgType('ok'); load(); }
+      else { setMsg(json.msg || 'Gagal'); setMsgType('err'); }
+    });
+  }
+
+  return (
+    <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>Akun Login (Email/Password)</div>
+        {mode === 'list' && (
+          <button className="btn btn-primary btn-sm" onClick={() => { setMode('add'); setMsg(''); }}>+ Tambah Akun Login</button>
+        )}
+      </div>
+
+      {msg && (
+        <div style={{ padding: '8px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, marginBottom: 12,
+          background: msgType === 'ok' ? 'rgba(16,185,129,.12)' : 'rgba(239,68,68,.1)',
+          color: msgType === 'ok' ? '#059669' : '#dc2626' }}>{msg}</div>
+      )}
+
+      {/* Add new account form */}
+      {mode === 'add' && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Buat Akun Login Baru</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div className="form-group"><label>Email *</label><input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="kasir@outlet.com" /></div>
+            <div className="form-group"><label>Password *</label><input type="text" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min 6 karakter" /></div>
+            <div className="form-group"><label>Nama Lengkap *</label><input value={newNama} onChange={e => setNewNama(e.target.value)} /></div>
+            <div className="form-group"><label>Role</label>
+              <select value={newRole} onChange={e => setNewRole(e.target.value)}>
+                <option value="KASIR">KASIR (1 outlet saja)</option>
+                <option value="ADMIN">ADMIN (semua outlet)</option>
+                <option value="OWNER">OWNER (semua outlet + settings)</option>
+              </select>
+            </div>
+            {newRole === 'KASIR' && (
+              <div className="form-group"><label>Outlet</label>
+                <select value={newOutletId} onChange={e => setNewOutletId(parseInt(e.target.value))}>
+                  {outlets.map((o: any) => <option key={o.id} value={o.id}>{o.nama}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 12, lineHeight: 1.5 }}>
+            KASIR = hanya bisa akses 1 outlet, menu terbatas. ADMIN = semua outlet, bisa edit transaksi. OWNER = full access termasuk settings & hapus.
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary" onClick={doCreate}>Buat Akun</button>
+            <button className="btn btn-outline" onClick={() => { setMode('list'); setMsg(''); }}>Batal</button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit existing account */}
+      {mode === 'edit' && editing && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Edit Akun: {editing.email}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div className="form-group"><label>Email</label><input value={editing.email} disabled style={{ opacity: .6 }} /></div>
+            <div className="form-group"><label>Nama</label><input value={editing.nama} onChange={e => setEditing({ ...editing, nama: e.target.value })} /></div>
+            <div className="form-group"><label>Role</label>
+              <select value={editing.role} onChange={e => setEditing({ ...editing, role: e.target.value, outlet_id: e.target.value === 'KASIR' ? (editing.outlet_id || 1) : 0 })}>
+                <option value="KASIR">KASIR</option><option value="ADMIN">ADMIN</option><option value="OWNER">OWNER</option>
+              </select>
+            </div>
+            {editing.role === 'KASIR' && (
+              <div className="form-group"><label>Outlet</label>
+                <select value={editing.outlet_id} onChange={e => setEditing({ ...editing, outlet_id: parseInt(e.target.value) })}>
+                  {outlets.map((o: any) => <option key={o.id} value={o.id}>{o.nama}</option>)}
+                </select>
+              </div>
+            )}
+            <div className="form-group"><label>Status</label>
+              <select value={editing.status} onChange={e => setEditing({ ...editing, status: e.target.value })}>
+                <option value="AKTIF">AKTIF</option><option value="NONAKTIF">NONAKTIF</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary" onClick={doEdit}>Simpan</button>
+            <button className="btn btn-outline" onClick={() => { setMode('list'); setEditing(null); setMsg(''); }}>Batal</button>
+          </div>
+        </div>
+      )}
+
+      {/* Account list table */}
+      {mode === 'list' && (
+        <div className="tbl-wrap">
+          <table>
+            <thead><tr><th>Email</th><th>Nama</th><th>Role</th><th>Outlet</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {loading ? <tr><td colSpan={6} className="empty-state">Memuat...</td></tr>
+              : rows.length === 0 ? <tr><td colSpan={6} className="empty-state">Belum ada akun login.</td></tr>
+              : rows.map((r: any) => (
+                <tr key={r.id}>
+                  <td style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{r.email}</td>
+                  <td style={{ fontWeight: 600 }}>{r.nama}</td>
+                  <td><span className={`badge ${r.role?.toLowerCase()}`}>{r.role}</span></td>
+                  <td>{getOutletName(r.outlet_id)}</td>
+                  <td><span className={`badge ${r.status?.toLowerCase()}`}>{r.status}</span></td>
+                  <td style={{ display: 'flex', gap: 4 }}>
+                    <button className="btn btn-outline btn-sm" onClick={() => { setEditing({ ...r }); setMode('edit'); setMsg(''); }}>Edit</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => doDelete(r)}>Hapus</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

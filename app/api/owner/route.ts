@@ -46,6 +46,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ok: true, rows: rows ?? [] });
     }
 
+    // ── Akun Login: list profiles + email dari auth ──────────
+    if (action === 'akun-login') {
+      const { data: profiles } = await db.from('profiles').select('*').order('outlet_id').order('nama');
+      // Get email from auth.users via admin API
+      const { data: { users } } = await db.auth.admin.listUsers({ perPage: 200 });
+      const emailMap: Record<string, string> = {};
+      for (const u of (users ?? [])) { emailMap[u.id] = u.email ?? ''; }
+      const rows = (profiles ?? []).map((p: any) => ({
+        ...p, email: emailMap[p.id] || '(unknown)',
+      }));
+      return NextResponse.json({ ok: true, rows });
+    }
+
     if (action === 'backup-status') {
       const { data: logs } = await db.from('audit_log')
         .select('tgl, nilai_baru, outlet')
@@ -214,9 +227,94 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // ── Akun Login: create new email login ──────────────────
+    if (action === 'akun-login-create') {
+      const { email, password, nama, role: aRole, outlet_id: aOutlet } = body;
+      if (!email || !password) return NextResponse.json({ ok: false, msg: 'Email dan password wajib.' });
+      if (!nama) return NextResponse.json({ ok: false, msg: 'Nama wajib.' });
+      if (password.length < 6) return NextResponse.json({ ok: false, msg: 'Password minimal 6 karakter.' });
+
+      // 1. Create auth user via Supabase Admin API
+      const { data: authData, error: authErr } = await db.auth.admin.createUser({
+        email: email.trim().toLowerCase(),
+        password,
+        email_confirm: true, // auto-confirm email
+      });
+      if (authErr) return NextResponse.json({ ok: false, msg: 'Gagal buat akun: ' + authErr.message });
+      const userId = authData.user.id;
+
+      // 2. Insert profile with matching UUID
+      const oid = parseInt(aOutlet) || 0;
+      const { error: profErr } = await db.from('profiles').insert({
+        id: userId,
+        nama: nama.trim(),
+        role: aRole || 'KASIR',
+        outlet_id: oid,
+        status: 'AKTIF',
+      });
+      if (profErr) {
+        // Rollback: hapus auth user jika profile gagal
+        await db.auth.admin.deleteUser(userId);
+        return NextResponse.json({ ok: false, msg: 'Gagal buat profile: ' + profErr.message });
+      }
+
+      await db.from('audit_log').insert({
+        user_nama: kasir, tabel: 'profiles', record_id: userId,
+        aksi: 'INSERT', field: 'akun-login',
+        nilai_baru: JSON.stringify({ email, nama, role: aRole, outlet_id: oid }),
+        outlet: 'SYSTEM',
+      });
+      return NextResponse.json({ ok: true, msg: `Akun ${email} berhasil dibuat.` });
+    }
+
+    // ── Akun Login: edit profile (role, outlet, status, nama) ──
+    if (action === 'akun-login-edit') {
+      const { id: profileId, nama, role: aRole, outlet_id: aOutlet, status: aStatus } = body;
+      if (!profileId) return NextResponse.json({ ok: false, msg: 'ID profile wajib.' });
+
+      const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+      if (nama != null) updates.nama = nama.trim();
+      if (aRole != null) updates.role = aRole;
+      if (aOutlet != null) updates.outlet_id = parseInt(aOutlet) || 0;
+      if (aStatus != null) updates.status = aStatus;
+
+      const { error } = await db.from('profiles').update(updates).eq('id', profileId);
+      if (error) return NextResponse.json({ ok: false, msg: 'Gagal update: ' + error.message });
+
+      await db.from('audit_log').insert({
+        user_nama: kasir, tabel: 'profiles', record_id: profileId,
+        aksi: 'EDIT', field: 'akun-login',
+        nilai_baru: JSON.stringify(updates),
+        outlet: 'SYSTEM',
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── Akun Login: delete account + profile ──────────────────
+    if (action === 'akun-login-delete') {
+      const { id: profileId } = body;
+      if (!profileId) return NextResponse.json({ ok: false, msg: 'ID profile wajib.' });
+
+      // Get current profile info for audit
+      const { data: prof } = await db.from('profiles').select('*').eq('id', profileId).single();
+
+      // 1. Delete profile first (FK constraint: profiles → auth.users ON DELETE CASCADE)
+      // Actually, delete auth user will cascade to profile. Let's delete auth user.
+      const { error: authDelErr } = await db.auth.admin.deleteUser(profileId);
+      if (authDelErr) return NextResponse.json({ ok: false, msg: 'Gagal hapus akun: ' + authDelErr.message });
+
+      await db.from('audit_log').insert({
+        user_nama: kasir, tabel: 'profiles', record_id: profileId,
+        aksi: 'DELETE', field: 'akun-login',
+        nilai_lama: prof ? JSON.stringify(prof) : '',
+        outlet: 'SYSTEM',
+      });
+      return NextResponse.json({ ok: true, msg: 'Akun berhasil dihapus.' });
+    }
+
     return NextResponse.json({ ok: false, msg: 'Unknown action' });
   } catch (err) {
     console.error('[owner POST]', err);
-    return NextResponse.json({ ok: false, msg: 'Server error.' }, { status: 500 });
+    return NextResponse.json({ ok: false, msg: 'Server error: ' + String(err) }, { status: 500 });
   }
 }
