@@ -173,7 +173,12 @@ export default function TebusPage() {
 
     // Auto-fill taksiran for JUAL/SITA
     if (tebusStatus === 'JUAL') setTaksiranJualRaw(taksiran > 0 ? taksiran.toLocaleString('id-ID') : '');
-    if (tebusStatus === 'SITA') setTaksiranSitaRaw(taksiran > 0 ? taksiran.toLocaleString('id-ID') : '');
+    // SITA: default = pinjaman + ujrah berjalan (total bayar sistem), bisa diedit kasir
+    if (tebusStatus === 'SITA') {
+      const sitaDefault = jmlGadai + ujrah;
+      const sitaRounded = sitaDefault > 0 ? Math.ceil(sitaDefault / 1000) * 1000 : taksiran;
+      setTaksiranSitaRaw(sitaRounded > 0 ? sitaRounded.toLocaleString('id-ID') : '');
+    }
 
     // Auto-fill ujrah baru perpanjang = ujrah lama (bisa diedit kasir)
     if (tebusStatus === 'PERPANJANG') {
@@ -527,8 +532,9 @@ export default function TebusPage() {
               {tebusStatus === 'SITA' && (
                 <div className="form-group">
                   <label>Taksiran (Modal Gudang Sita)</label>
-                  <input value={taksiranSitaRaw} inputMode="numeric" readOnly
-                    style={{ background: 'var(--surface2)' }} />
+                  <input value={taksiranSitaRaw} inputMode="numeric"
+                    onChange={e => setTaksiranSitaRaw(formatMoneyInput(e.target.value))} />
+                  <div className="hint">Default = pinjaman + ujrah. Bisa diedit.</div>
                 </div>
               )}
 
