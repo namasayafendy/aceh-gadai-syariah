@@ -46,13 +46,20 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 4. List outlet folders (top-level)
+    // 4. List outlet folders (top-level) — from Storage + fallback from DB
     let outlets: string[] = [];
     const { data: topFolders } = await db.storage.from(BUCKET).list('', { limit: 50 });
     if (topFolders) {
       outlets = topFolders
         .filter((f: any) => f.id === null) // folders have null id
         .map((f: any) => f.name);
+    }
+    // Fallback: jika Storage kosong, tampilkan outlet dari database
+    if (outlets.length === 0) {
+      const { data: dbOutlets } = await db.from('outlets').select('nama').order('id');
+      if (dbOutlets) {
+        outlets = dbOutlets.map((o: any) => String(o.nama));
+      }
     }
 
     // 5. List month folders for an outlet
@@ -107,8 +114,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Jalankan backup langsung (tidak pakai self-fetch)
-    const result = await runNightlyBackup(db);
-    return NextResponse.json(result);
+    try {
+      const result = await runNightlyBackup(db);
+      return NextResponse.json(result);
+    } catch (backupErr) {
+      console.error('[backup/list POST] runNightlyBackup error:', backupErr);
+      return NextResponse.json({ ok: false, msg: 'Backup gagal: ' + String(backupErr) });
+    }
   } catch (err) {
     console.error('[backup/list POST]', err);
     return NextResponse.json({ ok: false, msg: 'Server error: ' + String(err) }, { status: 500 });
