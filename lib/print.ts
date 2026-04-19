@@ -737,3 +737,194 @@ export function printLaporanMalam(d: LaporanMalamPrintData) {
 
   openPrintWindow(html);
 }
+
+// ════════════════════════════════════════════════════════════
+// 6. CETAK BERITA ACARA SERAH TERIMA (BAST)
+//    Dipakai saat proses serah terima barang sita → gudang aset
+// ════════════════════════════════════════════════════════════
+export interface BASTItem {
+  no_faktur?: string | null;
+  sita_id?: string | null;
+  barang?: string | null;
+  kategori?: string | null;
+  nama_nasabah?: string | null;
+  keterangan?: string | null;
+  taksiran_modal?: number;
+  tgl_sita?: string | null;
+}
+export interface BASTPrintData {
+  noBA: string;
+  tgl: string;
+  kasir: string;
+  items: BASTItem[];
+  totalModal: number;
+  outlet: string;
+  alamat: string;
+  kota: string;
+  telpon: string;
+  namaPerusahaan: string;
+  statusKepalaGudang?: string;
+}
+
+export function printBAST(r: BASTPrintData) {
+  const alamatLine = (r.alamat || '') + (r.telpon ? '. Telepon/Wa: ' + r.telpon : '');
+  const tglHdr = r.tgl ? new Date(r.tgl).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : todayLong();
+  const tglKota = (r.kota || 'Lhokseumawe') + ', ' + (r.tgl ? new Date(r.tgl).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }));
+  const kepala = r.statusKepalaGudang || 'Kepala Gudang';
+
+  function page(lembar: string) {
+    let rows = '';
+    r.items.forEach((it, i) => {
+      rows += `<tr>`
+        + `<td style="padding:4px 6px;text-align:center;border:1px solid #000">${i + 1}</td>`
+        + `<td style="padding:4px 6px;border:1px solid #000;font-family:monospace;font-size:9px">${it.no_faktur || '—'}</td>`
+        + `<td style="padding:4px 6px;border:1px solid #000">${it.nama_nasabah || '—'}</td>`
+        + `<td style="padding:4px 6px;border:1px solid #000">${it.kategori || '—'}</td>`
+        + `<td style="padding:4px 6px;border:1px solid #000">${it.barang || '—'}</td>`
+        + `<td style="padding:4px 6px;border:1px solid #000;font-size:9px">${it.keterangan || '—'}</td>`
+        + `<td style="padding:4px 6px;border:1px solid #000;font-family:monospace;font-size:9px;text-align:center">${fmtTgl(it.tgl_sita || '')}</td>`
+        + `<td style="padding:4px 6px;border:1px solid #000;text-align:right;font-family:monospace">${fmtRp(it.taksiran_modal || 0)}</td>`
+        + `</tr>`;
+    });
+    // Pad rows to minimum 8 for consistent layout
+    const minRows = 8;
+    for (let i = r.items.length; i < minRows; i++) {
+      rows += `<tr>${'<td style="padding:4px 6px;border:1px solid #000;height:22px">&nbsp;</td>'.repeat(8)}</tr>`;
+    }
+
+    return `<div class="page">`
+      + `<div style="display:flex;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:10px">`
+      + `<div style="width:60px;min-width:60px;text-align:center"><div style="border:1px solid #000;width:50px;height:50px;margin:auto;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold">AG</div></div>`
+      + `<div style="flex:1;text-align:center"><div style="font-size:13px;font-weight:bold">BERITA ACARA SERAH TERIMA BARANG</div><div style="font-size:12px;font-weight:bold">${r.namaPerusahaan || 'ACEH GADAI SYARIAH'}</div><div style="font-size:9px">Alamat: ${alamatLine}</div></div>`
+      + `<div style="text-align:right;min-width:150px;font-size:10px"><div style="border:1px solid #000;padding:3px 8px;font-family:monospace;font-weight:bold">No. BA: ${r.noBA}</div><div style="font-size:9px;margin-top:4px">${tglHdr}</div></div>`
+      + `</div>`
+      + `<p style="font-size:10px;margin-bottom:8px">Pada hari ini, <b>${tglHdr}</b>, telah dilakukan serah terima barang jaminan yang telah jatuh tempo (sita) dari pihak KASIR kepada pihak ${kepala.toUpperCase()}, dengan rincian sebagai berikut:</p>`
+      + `<table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:8px">`
+      + `<thead><tr style="background:#f3f4f6">`
+      + `<th style="padding:4px 6px;border:1px solid #000;width:28px">No</th>`
+      + `<th style="padding:4px 6px;border:1px solid #000">No Faktur</th>`
+      + `<th style="padding:4px 6px;border:1px solid #000">Nama Nasabah</th>`
+      + `<th style="padding:4px 6px;border:1px solid #000">Kategori</th>`
+      + `<th style="padding:4px 6px;border:1px solid #000">Barang</th>`
+      + `<th style="padding:4px 6px;border:1px solid #000">Keterangan</th>`
+      + `<th style="padding:4px 6px;border:1px solid #000">Tgl Sita</th>`
+      + `<th style="padding:4px 6px;border:1px solid #000;text-align:right">Modal</th>`
+      + `</tr></thead><tbody>${rows}</tbody>`
+      + `<tfoot><tr style="font-weight:bold;background:#f9fafb"><td colspan="7" style="padding:5px 6px;border:1px solid #000;text-align:right">Total Modal</td><td style="padding:5px 6px;border:1px solid #000;text-align:right;font-family:monospace">${fmtRp(r.totalModal)}</td></tr>`
+      + `<tr style="font-weight:bold"><td colspan="7" style="padding:5px 6px;border:1px solid #000;text-align:right">Jumlah Barang</td><td style="padding:5px 6px;border:1px solid #000;text-align:center">${r.items.length}</td></tr></tfoot>`
+      + `</table>`
+      + `<p style="font-size:10px;margin:10px 0 6px">Barang-barang tersebut di atas telah diperiksa dan diterima dalam keadaan baik serta bersegel, dan selanjutnya menjadi tanggung jawab pihak ${kepala.toUpperCase()} untuk disimpan di gudang aset dan dijual sesuai ketentuan perusahaan.</p>`
+      + `<p style="font-size:10px;margin-bottom:14px">Demikian Berita Acara Serah Terima ini dibuat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya.</p>`
+      + `<div style="text-align:right;font-size:10px;margin-bottom:8px">${tglKota}</div>`
+      + `<div style="display:flex;margin-top:16px;font-size:10px">`
+      + `<div style="flex:1;text-align:center"><b>Yang Menyerahkan</b><br><span style="font-size:9px">(Kasir)</span><br><br><br><br><span style="border-top:1px solid #000;padding-top:3px">${r.kasir || ''}</span></div>`
+      + `<div style="flex:1;text-align:center"><b>Yang Menerima</b><br><span style="font-size:9px">(${kepala})</span><br><br><br><br><span style="border-top:1px solid #000;padding-top:3px">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></div>`
+      + `</div>`
+      + `<div style="text-align:right;font-size:8px;margin-top:6px;color:#666">*) Lembar ${lembar}</div>`
+      + `</div>`;
+  }
+
+  const pages = page('Kasir') + page('Gudang');
+  openPrintWindow(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>BAST ${r.noBA}</title><style>${BASE_CSS}</style></head><body><div class="noprint"><button onclick="window.print()" style="padding:6px 16px;margin-right:8px">🖨️ Print</button><button onclick="window.close()" style="padding:6px 12px">✕ Tutup</button>&nbsp;&nbsp;<small>BAST ${r.noBA} · ${r.items.length} barang · Total: <b>${fmtRp(r.totalModal)}</b></small></div>${pages}</body></html>`);
+}
+
+// ════════════════════════════════════════════════════════════
+// 7. CETAK LAPORAN PENJUALAN BARANG SITA (BON JUAL)
+//    Dipakai saat menjual barang dari gudang aset
+// ════════════════════════════════════════════════════════════
+export interface JualBonItem {
+  no_faktur?: string | null;
+  sita_id?: string | null;
+  id_aset?: string | null;
+  barang?: string | null;
+  kategori?: string | null;
+  nama_nasabah?: string | null;
+  modal?: number;
+  harga_jual?: number;
+  laba?: number;
+}
+export interface JualBonPrintData {
+  noBon: string;
+  tgl: string;
+  kasir: string;
+  items: JualBonItem[];
+  totalModal: number;
+  totalJual: number;
+  totalLaba: number;
+  catatan?: string;
+  outlet: string;
+  alamat: string;
+  kota: string;
+  telpon: string;
+  namaPerusahaan: string;
+}
+
+export function printJualBon(r: JualBonPrintData) {
+  const alamatLine = (r.alamat || '') + (r.telpon ? '. Telepon/Wa: ' + r.telpon : '');
+  const tglHdr = r.tgl ? new Date(r.tgl).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : todayLong();
+  const tglKota = (r.kota || 'Lhokseumawe') + ', ' + (r.tgl ? new Date(r.tgl).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }));
+
+  function page(lembar: string) {
+    let rows = '';
+    r.items.forEach((it, i) => {
+      const modal = Number(it.modal || 0);
+      const jual = Number(it.harga_jual || 0);
+      const laba = Number(it.laba != null ? it.laba : (jual - modal));
+      const labaColor = laba >= 0 ? '#15803d' : '#dc2626';
+      rows += `<tr>`
+        + `<td style="padding:4px 6px;text-align:center;border:1px solid #000">${i + 1}</td>`
+        + `<td style="padding:4px 6px;border:1px solid #000;font-family:monospace;font-size:9px">${it.no_faktur || '—'}</td>`
+        + `<td style="padding:4px 6px;border:1px solid #000">${it.nama_nasabah || '—'}</td>`
+        + `<td style="padding:4px 6px;border:1px solid #000">${it.kategori || '—'}</td>`
+        + `<td style="padding:4px 6px;border:1px solid #000">${it.barang || '—'}</td>`
+        + `<td style="padding:4px 6px;border:1px solid #000;text-align:right;font-family:monospace">${fmtRp(modal)}</td>`
+        + `<td style="padding:4px 6px;border:1px solid #000;text-align:right;font-family:monospace;font-weight:bold">${fmtRp(jual)}</td>`
+        + `<td style="padding:4px 6px;border:1px solid #000;text-align:right;font-family:monospace;color:${labaColor};font-weight:bold">${fmtRp(laba)}</td>`
+        + `</tr>`;
+    });
+    const minRows = 8;
+    for (let i = r.items.length; i < minRows; i++) {
+      rows += `<tr>${'<td style="padding:4px 6px;border:1px solid #000;height:22px">&nbsp;</td>'.repeat(8)}</tr>`;
+    }
+    const labaTotalColor = r.totalLaba >= 0 ? '#15803d' : '#dc2626';
+
+    return `<div class="page">`
+      + `<div style="display:flex;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:10px">`
+      + `<div style="width:60px;min-width:60px;text-align:center"><div style="border:1px solid #000;width:50px;height:50px;margin:auto;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold">AG</div></div>`
+      + `<div style="flex:1;text-align:center"><div style="font-size:13px;font-weight:bold">LAPORAN PENJUALAN BARANG SITA</div><div style="font-size:12px;font-weight:bold">${r.namaPerusahaan || 'ACEH GADAI SYARIAH'}</div><div style="font-size:9px">Alamat: ${alamatLine}</div></div>`
+      + `<div style="text-align:right;min-width:150px;font-size:10px"><div style="border:1px solid #000;padding:3px 8px;font-family:monospace;font-weight:bold">No. Bon: ${r.noBon}</div><div style="font-size:9px;margin-top:4px">${tglHdr}</div></div>`
+      + `</div>`
+      + `<p style="font-size:10px;margin-bottom:8px">Pada hari ini, <b>${tglHdr}</b>, telah dilakukan penjualan barang jaminan dari gudang aset ${r.outlet || ''}, dengan rincian sebagai berikut:</p>`
+      + `<table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:8px">`
+      + `<thead><tr style="background:#f3f4f6">`
+      + `<th style="padding:4px 6px;border:1px solid #000;width:28px">No</th>`
+      + `<th style="padding:4px 6px;border:1px solid #000">No Faktur</th>`
+      + `<th style="padding:4px 6px;border:1px solid #000">Nama Nasabah</th>`
+      + `<th style="padding:4px 6px;border:1px solid #000">Kategori</th>`
+      + `<th style="padding:4px 6px;border:1px solid #000">Barang</th>`
+      + `<th style="padding:4px 6px;border:1px solid #000;text-align:right">Modal</th>`
+      + `<th style="padding:4px 6px;border:1px solid #000;text-align:right">Harga Jual</th>`
+      + `<th style="padding:4px 6px;border:1px solid #000;text-align:right">Laba</th>`
+      + `</tr></thead><tbody>${rows}</tbody>`
+      + `<tfoot>`
+      + `<tr style="font-weight:bold;background:#f9fafb"><td colspan="5" style="padding:5px 6px;border:1px solid #000;text-align:right">TOTAL</td>`
+      + `<td style="padding:5px 6px;border:1px solid #000;text-align:right;font-family:monospace">${fmtRp(r.totalModal)}</td>`
+      + `<td style="padding:5px 6px;border:1px solid #000;text-align:right;font-family:monospace">${fmtRp(r.totalJual)}</td>`
+      + `<td style="padding:5px 6px;border:1px solid #000;text-align:right;font-family:monospace;color:${labaTotalColor}">${fmtRp(r.totalLaba)}</td></tr>`
+      + `<tr style="font-weight:bold"><td colspan="5" style="padding:5px 6px;border:1px solid #000;text-align:right">Jumlah Barang</td><td colspan="3" style="padding:5px 6px;border:1px solid #000;text-align:center">${r.items.length}</td></tr>`
+      + `</tfoot></table>`
+      + (r.catatan ? `<p style="font-size:10px;margin:6px 0"><b>Catatan:</b> ${r.catatan}</p>` : '')
+      + `<p style="font-size:10px;margin:10px 0 6px">Barang-barang di atas telah terjual dan seluruh hasil penjualan telah diterima oleh kasir sesuai dengan rincian di atas.</p>`
+      + `<p style="font-size:10px;margin-bottom:14px">Demikian laporan penjualan ini dibuat dengan sebenarnya untuk dipergunakan sebagaimana mestinya.</p>`
+      + `<div style="text-align:right;font-size:10px;margin-bottom:8px">${tglKota}</div>`
+      + `<div style="display:flex;margin-top:16px;font-size:10px">`
+      + `<div style="flex:1;text-align:center"><b>Kasir</b><br><br><br><br><br><span style="border-top:1px solid #000;padding-top:3px">${r.kasir || ''}</span></div>`
+      + `<div style="flex:1;text-align:center"><b>Mengetahui</b><br><span style="font-size:9px">(${r.namaPerusahaan || 'PT ACEH GADAI SYARIAH'})</span><br><br><br><br><span style="border-top:1px solid #000;padding-top:3px">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></div>`
+      + `</div>`
+      + `<div style="text-align:right;font-size:8px;margin-top:6px;color:#666">*) Lembar ${lembar}</div>`
+      + `</div>`;
+  }
+
+  const pages = page('Kasir') + page('Arsip');
+  openPrintWindow(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Laporan Jual ${r.noBon}</title><style>${BASE_CSS}</style></head><body><div class="noprint"><button onclick="window.print()" style="padding:6px 16px;margin-right:8px">🖨️ Print</button><button onclick="window.close()" style="padding:6px 12px">✕ Tutup</button>&nbsp;&nbsp;<small>Bon ${r.noBon} · ${r.items.length} barang · Total jual: <b>${fmtRp(r.totalJual)}</b> · Laba: <b>${fmtRp(r.totalLaba)}</b></small></div>${pages}</body></html>`);
+}

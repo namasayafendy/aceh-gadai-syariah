@@ -28,9 +28,10 @@ export async function POST(request: NextRequest) {
     const sitaIds: string[] = body.sitaIds ?? [];
     if (!sitaIds.length) return NextResponse.json({ ok: false, msg: 'Pilih minimal 1 barang.' });
 
-    // Ambil outlet name
-    const { data: outlet } = await db.from('outlets').select('nama').eq('id', outletId).single();
-    const outletName = outlet ? String((outlet as any).nama) : '';
+    // Ambil outlet full settings (untuk print BAST)
+    const { data: outlet } = await db.from('outlets').select('*').eq('id', outletId).single();
+    if (!outlet) return NextResponse.json({ ok: false, msg: 'Outlet tidak ditemukan.' });
+    const outletName = String((outlet as any).nama ?? '');
 
     // Generate No BA
     const noBA = await safeGetNextId(db, 'BA', outletId);
@@ -42,7 +43,9 @@ export async function POST(request: NextRequest) {
       kasir, jumlah_item: sitaIds.length, status: 'SELESAI',
     });
 
-    // Process each sita item
+    // Process each sita item, kumpulkan detail untuk print BAST
+    const items: any[] = [];
+    let totalModal = 0;
     for (const sitaId of sitaIds) {
       // Get sita data
       const { data: sita } = await db.from('tb_gudang_sita').select('*').eq('sita_id', sitaId).single();
@@ -71,6 +74,20 @@ export async function POST(request: NextRequest) {
         tgl_masuk: now,
         status_aset: 'TERSEDIA',
       });
+
+      const modal = Number((sita as any).taksiran_modal || 0);
+      totalModal += modal;
+      items.push({
+        id_aset: asetId,
+        sita_id: sitaId,
+        no_faktur: (sita as any).no_faktur,
+        barang: (sita as any).barang,
+        kategori: (sita as any).kategori,
+        nama_nasabah: (sita as any).nama_nasabah,
+        keterangan: (sita as any).keterangan,
+        taksiran_modal: modal,
+        tgl_sita: (sita as any).tgl_sita,
+      });
     }
 
     // Audit log
@@ -81,7 +98,17 @@ export async function POST(request: NextRequest) {
       outlet: outletName,
     });
 
-    return NextResponse.json({ ok: true, noBA, jumlah: sitaIds.length, kasir });
+    return NextResponse.json({
+      ok: true, noBA, jumlah: sitaIds.length, kasir,
+      tgl: now, totalModal, items,
+      outlet: outletName,
+      alamat:   (outlet as any).alamat ?? '',
+      kota:     (outlet as any).kota ?? '',
+      telpon:   (outlet as any).telpon ?? '',
+      namaPerusahaan:   (outlet as any).nama_perusahaan ?? 'PT. ACEH GADAI SYARIAH',
+      waktuOperasional: (outlet as any).waktu_operasional ?? '',
+      statusKepalaGudang: (outlet as any).status_kepala_gudang ?? '',
+    });
   } catch (err) {
     console.error('[gudang/serah-terima]', err);
     return NextResponse.json({ ok: false, msg: 'Server error.' }, { status: 500 });

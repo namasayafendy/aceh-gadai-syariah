@@ -129,6 +129,7 @@ export interface TbJualBon {
   id_bon: string; no_bon: string; tgl: string; kasir: string | null;
   jumlah_item: number; total_modal: number; total_jual: number; laba: number;
   updated_at: string; catatan: string | null;
+  outlet: string | null;
 }
 
 export interface TbJualBonDetail {

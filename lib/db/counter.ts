@@ -39,10 +39,13 @@ const LABEL_MAP: Record<string, string> = {
   TTS:         'ID TTS',
   SITA:        'Sita ID',
   KEHILANGAN:  'ID Kehilangan',
+  BA:          'ID BA',
+  ASET:        'ID Aset',
+  JUALBON:     'ID Jual Bon',
 };
 
 // Shared types use outlet_id = 0 (global counter)
-const SHARED_TYPES = ['GADAI', 'TEBUS', 'JUAL', 'BUYBACK', 'KAS', 'TTS', 'DISKON', 'SITA', 'KEHILANGAN'];
+const SHARED_TYPES = ['GADAI', 'TEBUS', 'JUAL', 'BUYBACK', 'KAS', 'TTS', 'DISKON', 'SITA', 'KEHILANGAN', 'BA', 'ASET', 'JUALBON'];
 
 // Per-outlet types: SBR, SJB, BARCODE_A (Barcode Konsumen)
 // These get their own counter row per outlet
@@ -60,6 +63,9 @@ const PREFIX_MAP: Record<string, (outletId: number) => string> = {
   TTS:         ()   => 'TTS-',
   SITA:        ()   => 'GDS-',
   KEHILANGAN:  ()   => 'KHL-',
+  BA:          ()   => 'BA-',
+  ASET:        ()   => 'AST-',
+  JUALBON:     ()   => 'JB-',
 };
 
 /**
