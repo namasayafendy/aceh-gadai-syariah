@@ -151,7 +151,7 @@ export async function generateKas(
         add(`TAMBAH ${noFaktur}`, 'KELUAR', 'CASH', gb);
         add(`Tambah Pinjaman ${noFaktur}`, 'MASUK', 'CASH', gb - jb);
         if (bank > 0) add(`TF TAMBAH ${noFaktur}`, 'MASUK', 'CASH', bank);
-        if (cash > 0) add(`Tambah Cash ${noFaktur}`, 'MASUK', 'CASH', cash);
+        if (cash > 10000) add(`Tambah Cash ${noFaktur}`, 'MASUK', 'CASH', cash - 10000);
       }
       break;
     }
