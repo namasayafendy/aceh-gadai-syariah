@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     let q = db.from('tb_gudang_aset')
       .select('*')
-      .eq('status_aset', 'TERSEDIA')
+      .eq('status_aset', 'DI GUDANG')
       .order('tgl_masuk', { ascending: false });
     if (outletFilter) q = q.eq('outlet', outletFilter);
     const { data: rows } = await q;

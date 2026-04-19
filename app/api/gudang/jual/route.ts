@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
       if (String((aset as any).outlet || '') !== outletName) {
         return NextResponse.json({ ok: false, msg: `Aset ${it.id_aset} bukan milik outlet ini.` });
       }
-      if (String((aset as any).status_aset || '').toUpperCase() !== 'TERSEDIA') {
+      if (String((aset as any).status_aset || '').toUpperCase() !== 'DI GUDANG') {
         return NextResponse.json({ ok: false, msg: `Aset ${it.id_aset} sudah terjual/tidak tersedia.` });
       }
 

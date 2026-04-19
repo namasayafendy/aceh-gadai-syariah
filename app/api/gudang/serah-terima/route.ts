@@ -48,19 +48,22 @@ export async function POST(request: NextRequest) {
     let totalModal = 0;
     for (const sitaId of sitaIds) {
       // Get sita data
-      const { data: sita } = await db.from('tb_gudang_sita').select('*').eq('sita_id', sitaId).single();
-      if (!sita) continue;
+      const { data: sita, error: sitaErr } = await db.from('tb_gudang_sita').select('*').eq('sita_id', sitaId).single();
+      if (sitaErr || !sita) {
+        return NextResponse.json({ ok: false, msg: `Barang sita ${sitaId} tidak ditemukan: ${sitaErr?.message || ''}` });
+      }
 
       // Update sita status
-      await db.from('tb_gudang_sita').update({
+      const { error: upSitaErr } = await db.from('tb_gudang_sita').update({
         status_gudang: 'DISERAHKAN',
         no_bon_ba: noBA,
         tgl_serah_terima: now,
       }).eq('sita_id', sitaId);
+      if (upSitaErr) return NextResponse.json({ ok: false, msg: `Gagal update sita ${sitaId}: ${upSitaErr.message}` });
 
-      // Insert to gudang aset
+      // Insert to gudang aset (status 'DI GUDANG' = siap jual, sesuai CHECK constraint DB)
       const asetId = await safeGetNextId(db, 'ASET', outletId);
-      await db.from('tb_gudang_aset').insert({
+      const { error: insAsetErr } = await db.from('tb_gudang_aset').insert({
         id_aset: asetId,
         id_ba: noBA, no_ba: noBA,
         sita_id: sitaId,
@@ -72,8 +75,9 @@ export async function POST(request: NextRequest) {
         taksiran_modal: (sita as any).taksiran_modal,
         outlet: outletName,
         tgl_masuk: now,
-        status_aset: 'TERSEDIA',
+        status_aset: 'DI GUDANG',
       });
+      if (insAsetErr) return NextResponse.json({ ok: false, msg: `Gagal insert aset ${asetId}: ${insAsetErr.message}` });
 
       const modal = Number((sita as any).taksiran_modal || 0);
       totalModal += modal;
