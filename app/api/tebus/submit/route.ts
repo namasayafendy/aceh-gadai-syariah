@@ -55,8 +55,10 @@ export async function POST(request: NextRequest) {
     const kasir = pinResult.nama as string;
 
     // ── 2. Validasi diskon wajib alasan ───────────────────────
+    // SITA / JUAL / BATAL: tidak ada konsep diskon/alasan (sesuai GAS)
+    const statusPerluDiskon = ['TEBUS', 'PERPANJANG', 'TAMBAH', 'KURANG'].includes(body.status);
     const selisih = Number(body.totalTebusSistem) - Number(body.jumlahBayar);
-    if (selisih > 0) {
+    if (statusPerluDiskon && selisih > 0) {
       if (!body.alasan || body.alasan.trim().replace(/\s+/g, '').length < 2) {
         return NextResponse.json({
           ok: false,
@@ -77,7 +79,7 @@ export async function POST(request: NextRequest) {
 
     // ── 5. Simpan diskon jika ada (selisih > Rp 9.000) ───────
     let idDiskon = '';
-    const adaDiskon = selisih > 9000;
+    const adaDiskon = statusPerluDiskon && selisih > 9000;
     if (adaDiskon) {
       idDiskon = await safeGetNextId(db, 'DISKON', outletId);
 
