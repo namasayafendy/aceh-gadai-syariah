@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { generateKas } from '@/lib/db/kas';
+import { safeGetNextId, safeGetNextBarcodeA } from '@/lib/db/counter';
 
 // ─── Input validation ────────────────────────────────────────
 interface SubmitGadaiBody {
@@ -83,9 +84,9 @@ export async function POST(request: NextRequest) {
 
     // ── 5. Generate ID, No Faktur, Barcode ───────────────────
     const [noFaktur, idGadai, barcodeA] = await Promise.all([
-      db.rpc('get_next_id', { p_tipe: 'SBR',   p_outlet_id: outletId }).then(r => r.data as string),
-      db.rpc('get_next_id', { p_tipe: 'GADAI',  p_outlet_id: outletId }).then(r => r.data as string),
-      db.rpc('get_next_barcode_a', { p_outlet_id: outletId }).then(r => r.data as string),
+      safeGetNextId(db, 'SBR',   outletId),
+      safeGetNextId(db, 'GADAI', outletId),
+      safeGetNextBarcodeA(db, outletId),
     ]);
 
     // BarcodeB = G + YYMMDD + NNN (dari idGadai)

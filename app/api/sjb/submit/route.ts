@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { generateKas } from '@/lib/db/kas';
+import { safeGetNextId, safeGetNextBarcodeA } from '@/lib/db/counter';
 
 interface SubmitSJBBody {
   pin:          string;
@@ -70,8 +71,8 @@ export async function POST(request: NextRequest) {
 
     // ── 5. Generate ID ────────────────────────────────────────
     const [noSJB, barcodeA] = await Promise.all([
-      db.rpc('get_next_id', { p_tipe: 'SJB', p_outlet_id: outletId }).then(r => r.data as string),
-      db.rpc('get_next_barcode_a', { p_outlet_id: outletId }).then(r => r.data as string),
+      safeGetNextId(db, 'SJB', outletId),
+      safeGetNextBarcodeA(db, outletId),
     ]);
 
     // idSJB: SJB-[outletId]-[yyyyMMdd]-[random4]

@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { generateKas, type TipeTransaksi, type PaymentMethod } from '@/lib/db/kas';
+import { safeGetNextId } from '@/lib/db/counter';
 
 export async function POST(request: NextRequest) {
   try {
@@ -138,9 +139,9 @@ export async function POST(request: NextRequest) {
           const jumlah = Number(e.jumlah || 0);
           if (jumlah === 0) continue;
 
-          const { data: newKasId } = await db.rpc('get_next_id', { p_tipe: 'KAS', p_outlet_id: outletId });
+          const newKasId = await safeGetNextId(db, 'KAS', outletId);
           await db.from('tb_kas').insert({
-            id: newKasId as string,
+            id: newKasId,
             tgl: new Date().toISOString(),
             no_ref: noFaktur,
             keterangan: 'BATAL ' + String(e.keterangan || ''),

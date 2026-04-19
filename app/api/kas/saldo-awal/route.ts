@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
+import { safeGetNextId } from '@/lib/db/counter';
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,9 +42,9 @@ export async function POST(request: NextRequest) {
     const toInsert = [];
 
     if (Number(body.cash ?? 0) !== 0) {
-      const { data: id1 } = await db.rpc('get_next_id', { p_tipe: 'KAS', p_outlet_id: outletId });
+      const id1 = await safeGetNextId(db, 'KAS', outletId);
       toInsert.push({
-        id:         id1 as string,
+        id:         id1,
         tgl:        now,
         no_ref:     'SALDO_AWAL',
         keterangan: 'Saldo Awal Cash',
@@ -58,9 +59,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (Number(body.bank ?? 0) !== 0) {
-      const { data: id2 } = await db.rpc('get_next_id', { p_tipe: 'KAS', p_outlet_id: outletId });
+      const id2 = await safeGetNextId(db, 'KAS', outletId);
       toInsert.push({
-        id:         id2 as string,
+        id:         id2,
         tgl:        now,
         no_ref:     'SALDO_AWAL',
         keterangan: 'Saldo Awal Bank',

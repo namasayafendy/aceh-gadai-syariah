@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
+import { safeGetNextId } from '@/lib/db/counter';
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,8 +33,7 @@ export async function POST(request: NextRequest) {
     const outletName = outlet ? String((outlet as any).nama) : '';
 
     // Generate No BA
-    const { data: baId } = await db.rpc('get_next_id', { p_tipe: 'BA', p_outlet_id: outletId });
-    const noBA = baId as string;
+    const noBA = await safeGetNextId(db, 'BA', outletId);
     const now = new Date().toISOString();
 
     // Insert serah terima header
@@ -56,9 +56,9 @@ export async function POST(request: NextRequest) {
       }).eq('sita_id', sitaId);
 
       // Insert to gudang aset
-      const { data: asetId } = await db.rpc('get_next_id', { p_tipe: 'ASET', p_outlet_id: outletId });
+      const asetId = await safeGetNextId(db, 'ASET', outletId);
       await db.from('tb_gudang_aset').insert({
-        id_aset: asetId as string,
+        id_aset: asetId,
         id_ba: noBA, no_ba: noBA,
         sita_id: sitaId,
         no_faktur: (sita as any).no_faktur,

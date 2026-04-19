@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
+import { safeGetNextId } from '@/lib/db/counter';
 
 // ════════════════════════════════════════════════════════════
 // POST /api/kas — Tambah entri kas manual
@@ -49,14 +50,12 @@ export async function POST(request: NextRequest) {
     const outletName = (outlet?.nama as string) ?? '';
 
     // Generate ID Kas
-    const { data: kasId } = await db.rpc('get_next_id', {
-      p_tipe: 'KAS', p_outlet_id: outletId,
-    });
+    const kasId = await safeGetNextId(db, 'KAS', outletId);
 
     const tgl = body.tgl ? new Date(body.tgl).toISOString() : new Date().toISOString();
 
     const { error } = await db.from('tb_kas').insert({
-      id:          kasId as string,
+      id:          kasId,
       tgl,
       no_ref:      body.noRef || '-',
       keterangan:  body.keterangan || '',

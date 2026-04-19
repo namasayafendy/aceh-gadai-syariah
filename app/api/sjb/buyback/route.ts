@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { generateKas } from '@/lib/db/kas';
+import { safeGetNextId } from '@/lib/db/counter';
 import type { TipeTransaksi, PaymentMethod } from '@/lib/db/kas';
 
 interface SubmitBuybackBody {
@@ -85,10 +86,7 @@ export async function POST(request: NextRequest) {
     const adaDiskon = selisih > 9000;
     let idDiskon = '';
     if (adaDiskon) {
-      const { data: idDsk } = await db.rpc('get_next_id', {
-        p_tipe: 'DISKON', p_outlet_id: outletId,
-      });
-      idDiskon = idDsk as string;
+      idDiskon = await safeGetNextId(db, 'DISKON', outletId);
 
       await db.from('tb_diskon').insert({
         id_diskon:            idDiskon,
@@ -112,10 +110,7 @@ export async function POST(request: NextRequest) {
     const tanpaSurat = body.tanpaSurat === true;
     let idKehilangan = '';
     if (tanpaSurat) {
-      const { data: idKhl } = await db.rpc('get_next_id', {
-        p_tipe: 'KEHILANGAN', p_outlet_id: outletId,
-      });
-      idKehilangan = (idKhl as string) ?? '';
+      idKehilangan = await safeGetNextId(db, 'KEHILANGAN', outletId);
     }
 
     // ── 7. Insert tb_buyback ─────────────────────────────────

@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { generateKas } from '@/lib/db/kas';
+import { safeGetNextId } from '@/lib/db/counter';
 import type { TipeTransaksi, PaymentMethod } from '@/lib/db/kas';
 
 interface SubmitTebusBody {
@@ -70,9 +71,7 @@ export async function POST(request: NextRequest) {
     const outletName: string = outlet.nama;
 
     // ── 4. Generate ID Tebus ──────────────────────────────────
-    const { data: idTebus } = await db.rpc('get_next_id', {
-      p_tipe: 'TEBUS', p_outlet_id: outletId,
-    });
+    const idTebus = await safeGetNextId(db, 'TEBUS', outletId);
 
     const now = new Date();
 
@@ -80,15 +79,12 @@ export async function POST(request: NextRequest) {
     let idDiskon = '';
     const adaDiskon = selisih > 9000;
     if (adaDiskon) {
-      const { data: idDsk } = await db.rpc('get_next_id', {
-        p_tipe: 'DISKON', p_outlet_id: outletId,
-      });
-      idDiskon = idDsk as string;
+      idDiskon = await safeGetNextId(db, 'DISKON', outletId);
 
       await db.from('tb_diskon').insert({
         id_diskon:            idDiskon,
         no_faktur:            body.noFaktur,
-        id_tebus:             idTebus as string,
+        id_tebus:             idTebus,
         nama_nasabah:         body.namaNasabah,
         jumlah_pinjaman:      Number(body.jumlahGadai),
         ujrah_berjalan:       Number(body.ujrahBerjalan),
@@ -107,15 +103,12 @@ export async function POST(request: NextRequest) {
     const tanpaSurat = body.tanpaSurat === true;
     let idKehilangan = '';
     if (tanpaSurat) {
-      const { data: idKhl } = await db.rpc('get_next_id', {
-        p_tipe: 'KEHILANGAN', p_outlet_id: outletId,
-      });
-      idKehilangan = (idKhl as string) ?? '';
+      idKehilangan = await safeGetNextId(db, 'KEHILANGAN', outletId);
     }
 
     // ── 7. Insert tb_tebus ────────────────────────────────────
     const tebusRow = {
-      id:                  idTebus as string,
+      id:                  idTebus,
       tgl:                 now.toISOString(),
       id_gadai:            body.idGadai,
       no_faktur:           body.noFaktur,
@@ -189,15 +182,13 @@ export async function POST(request: NextRequest) {
 
     // ── 10. Tambah ke gudang sita jika SITA / JUAL ────────────
     if (body.status === 'SITA' || body.status === 'JUAL') {
-      const { data: sitaId } = await db.rpc('get_next_id', {
-        p_tipe: 'SITA', p_outlet_id: outletId,
-      });
+      const sitaId = await safeGetNextId(db, 'SITA', outletId);
       const modalTaksiran = body.status === 'SITA'
         ? Number(body.taksiranSita ?? body.taksiran)
         : Number(body.taksiranJual ?? body.taksiran);
 
       await db.from('tb_gudang_sita').insert({
-        sita_id:       sitaId as string,
+        sita_id:       sitaId,
         no_faktur:     body.noFaktur,
         id_gadai:      body.idGadai,
         tgl_sita:      now.toISOString(),
@@ -215,7 +206,7 @@ export async function POST(request: NextRequest) {
     // noRef = idTebus supaya reverse per-transaksi presisi
     await generateKas(db, outletId, {
       noFaktur:       body.noFaktur,
-      noRef:          idTebus as string,
+      noRef:          idTebus,
       jenisTransaksi: body.status as TipeTransaksi,
       payment:        body.payment,
       cash:           Number(body.cash ?? 0),
@@ -235,7 +226,7 @@ export async function POST(request: NextRequest) {
     await db.from('audit_log').insert({
       user_nama:  kasir,
       tabel:      'tb_tebus',
-      record_id:  idTebus as string,
+      record_id:  idTebus,
       aksi:       'INSERT',
       field:      'ALL',
       nilai_baru: JSON.stringify({ noFaktur: body.noFaktur, status: body.status }),

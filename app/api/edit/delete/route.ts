@@ -16,6 +16,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
+import { safeGetNextId } from '@/lib/db/counter';
 
 export async function POST(request: NextRequest) {
   try {
@@ -79,11 +80,11 @@ export async function POST(request: NextRequest) {
         if (jumlah === 0) continue;
 
         // Generate new kas ID for reverse entry
-        const { data: newKasId } = await db.rpc('get_next_id', { p_tipe: 'KAS', p_outlet_id: outletId });
+        const newKasId = await safeGetNextId(db, 'KAS', outletId);
 
         // Insert reverse entry
         await db.from('tb_kas').insert({
-          id: newKasId as string,
+          id: newKasId,
           tgl: new Date().toISOString(),
           no_ref: noFaktur,                              // same noRef
           keterangan: 'BATAL ' + String(e.keterangan || ''),  // prefix BATAL

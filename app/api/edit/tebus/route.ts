@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { generateKas, type TipeTransaksi, type PaymentMethod } from '@/lib/db/kas';
+import { safeGetNextId } from '@/lib/db/counter';
 
 // ── Helper: validasi PIN + role check ─────────────────────────
 async function validateAdmin(db: any, pin: string, outletId: number) {
@@ -46,9 +47,9 @@ async function reverseKasByRef(
       const jumlah = Number(e.jumlah || 0);
       if (jumlah === 0) continue;
 
-      const { data: newKasId } = await db.rpc('get_next_id', { p_tipe: 'KAS', p_outlet_id: outletId });
+      const newKasId = await safeGetNextId(db, 'KAS', outletId);
       await db.from('tb_kas').insert({
-        id: newKasId as string,
+        id: newKasId,
         tgl: new Date().toISOString(),
         no_ref: noRef,
         keterangan: 'BATAL ' + String(e.keterangan || ''),

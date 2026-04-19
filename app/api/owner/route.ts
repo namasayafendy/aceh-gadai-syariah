@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
+import { ensureAllCounters } from '@/lib/db/counter';
 
 export async function GET(request: NextRequest) {
   try {
@@ -229,22 +230,7 @@ export async function POST(request: NextRequest) {
 
       // ── Buat counter entries untuk outlet baru ────────────
       // Supaya semua fungsi (gadai, tebus, sjb, kas, dll) langsung jalan
-      const counterTypes = [
-        { label: 'SBR',   prefix: `SBR-${nextId}-` },
-        { label: 'GADAI', prefix: `GDI-${nextId}-` },
-        { label: 'KAS',   prefix: `KAS-${nextId}-` },
-        { label: 'TEBUS', prefix: `TBS-${nextId}-` },
-        { label: 'SJB',   prefix: `SJB-${nextId}-` },
-        { label: 'BA',    prefix: `BA-${nextId}-` },
-        { label: 'ASET',  prefix: `AST-${nextId}-` },
-        { label: 'BARCODE', prefix: `BC${nextId}` },
-      ];
-      for (const ct of counterTypes) {
-        await db.from('counter').insert({
-          label: ct.label, prefix: ct.prefix,
-          last_val: 0, outlet_id: nextId,
-        });
-      }
+      await ensureAllCounters(db, nextId);
 
       await db.from('audit_log').insert({
         user_nama: kasir, tabel: 'outlets', record_id: String(nextId),
