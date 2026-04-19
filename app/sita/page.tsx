@@ -379,13 +379,14 @@ export default function GudangSitaPage() {
                 <thead><tr>
                   <th>No Bon</th><th>Tgl</th><th>Kasir</th><th className="num">Item</th>
                   <th className="num">Modal</th><th className="num">Jual</th><th className="num">Laba</th>
+                  <th>Catatan</th>
                   <th style={{ width: 80 }}></th>
                 </tr></thead>
                 <tbody>
                   {jualLoading ? (
-                    <tr><td colSpan={8} className="empty-state">⏳ Memuat...</td></tr>
+                    <tr><td colSpan={9} className="empty-state">⏳ Memuat...</td></tr>
                   ) : jualRows.length === 0 ? (
-                    <tr><td colSpan={8} className="empty-state">Belum ada riwayat</td></tr>
+                    <tr><td colSpan={9} className="empty-state">Belum ada riwayat</td></tr>
                   ) : jualRows.map((r: any, i: number) => (
                     <tr key={r.id_bon || i}>
                       <td style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{r.no_bon}</td>
@@ -395,6 +396,9 @@ export default function GudangSitaPage() {
                       <td className="num">{formatRp(r.total_modal)}</td>
                       <td className="num">{formatRp(r.total_jual)}</td>
                       <td className="num" style={{ color: 'var(--green)', fontWeight: 700 }}>{formatRp(r.laba)}</td>
+                      <td style={{ fontStyle: 'italic', color: 'var(--muted)', maxWidth: 200, whiteSpace: 'normal' }}>
+                        {r.catatan ? `📝 ${r.catatan}` : '—'}
+                      </td>
                       <td style={{ textAlign: 'center' }}>
                         <button className="btn btn-primary btn-sm" onClick={() => reprintJualBon(r.no_bon)} title="Cetak ulang">🖨️</button>
                       </td>
