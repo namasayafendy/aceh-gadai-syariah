@@ -209,13 +209,16 @@ export default function DashboardPage() {
   ];
 
   // ── Rekap Keluar ─────────────────────────────────────────
-  // Total Keluar = HANYA akad baru hari ini (gadai baru + sjb baru).
-  // Gadai/SJB yg hari ini PERPANJANG/TAMBAH/KURANG TIDAK dihitung sbg akad baru
-  // walau tgl_gadai-nya direset — karena akad aslinya hari sebelumnya.
-  // TAMBAH/KURANG efek kas-nya muncul di rekap Tebus Masuk (sudah benar).
-  const gadaiNominal = gadaiFiltered.reduce((s, r) => s + Number(r.jumlah_gadai ?? 0), 0);
+  // Total Keluar = row "Gadai Baru" yg ditampilkan di tabel:
+  //   • gadaiFiltered     → akad baru hari ini (exclude yg cuma PERPANJANG/TAMBAH/KURANG)
+  //   • sjbFiltered       → akad SJB baru hari ini (exclude PERPANJANG)
+  //   • tambahKurangRows  → TAMBAH/KURANG hari ini (pakai jumlah BARU)
+  // Konsisten antara count & nominal dgn tabel "Gadai Baru".
+  // SJB PERPANJANG tetap di-exclude (akad asli hari sebelumnya; SJB tdk punya TAMBAH/KURANG).
+  const gadaiNominal = gadaiFiltered.reduce((s, r) => s + Number(r.jumlah_gadai ?? 0), 0)
+    + tambahKurangRows.reduce((s, r) => s + Number(r.jumlah_gadai_baru ?? 0), 0);
   const sjbNominal   = sjbFiltered.reduce((s, r) => s + Number(r.harga_jual ?? 0), 0);
-  const gadaiCount   = gadaiFiltered.length;
+  const gadaiCount   = gadaiFiltered.length + tambahKurangRows.length;
   const sjbCount     = sjbFiltered.length;
 
   // ── Rekap Masuk ──────────────────────────────────────────

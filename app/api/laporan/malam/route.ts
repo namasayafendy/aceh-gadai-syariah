@@ -144,11 +144,13 @@ export async function GET(request: NextRequest) {
     let tebusMasuk = 0, perpanjangMasuk = 0, buybackMasuk = 0;
     let labaTotal = 0;
 
-    // Total Keluar = HANYA akad baru hari ini (gadai baru + sjb baru).
-    // Gadai/SJB yg hari ini PERPANJANG/TAMBAH/KURANG TIDAK dihitung sbg akad baru
-    // walau tgl_gadai-nya direset — karena akad aslinya hari sebelumnya.
-    // (match dashboard utk konsistensi angka)
+    // Total Keluar = row "Gadai Baru" yg ditampilkan di tabel:
+    //   • gadaiFiltered        → akad baru hari ini (exclude yg cuma PERPANJANG/TAMBAH/KURANG)
+    //   • sjbFiltered          → akad SJB baru hari ini (exclude PERPANJANG)
+    //   • tambahKurangInjected → TAMBAH/KURANG hari ini (pakai jumlah BARU)
+    // Konsisten antara count & nominal dgn tabel "Gadai Baru". (match dashboard)
     gadaiFiltered.forEach(r => { gadaiKeluar += Number(r.jumlah_gadai ?? 0); });
+    tambahKurangInjected.forEach(r => { gadaiKeluar += Number(r.jumlah_gadai ?? 0); });
     sjbFiltered.forEach(r   => { sjbKeluar   += Number(r.harga_jual    ?? 0); });
 
     // ── Rekap Masuk (mirror dashboard — pisah tebus/buyback/perpanjang) ──
