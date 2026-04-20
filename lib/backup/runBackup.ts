@@ -197,8 +197,3 @@ function buildLaporanMalamHtml(
     </p>
   </body></html>`;
 }
-
-      File ini dibuat otomatis oleh sistem Aceh Gadai Syariah.
-    </p>
-  </body></html>`;
-}
