@@ -122,6 +122,22 @@ export async function GET(request: NextRequest) {
     const gadaiFiltered = (gadaiRaw ?? []).filter(r => !isReissue(r));
     const sjbFiltered   = (sjbRaw   ?? []).filter(r => !isReissue(r));
 
+    // Inject TAMBAH/KURANG sbg row di "Gadai Baru" pakai jumlah baru (mirror dashboard)
+    // SJB tidak punya TAMBAH/KURANG → hanya dari tb_tebus
+    const tambahKurangInjected = (tebusRaw ?? []).filter(r => {
+      const st = String(r.status ?? '').toUpperCase();
+      return st === 'TAMBAH' || st === 'KURANG';
+    }).map(r => ({
+      no_faktur:    r.no_faktur,
+      kategori:     r.kategori,
+      barang:       r.barang,
+      taksiran:     Number(r.taksiran ?? 0),
+      jumlah_gadai: Number(r.jumlah_gadai_baru ?? 0),
+      payment:      r.payment ?? 'CASH',
+      kasir:        r.kasir ?? '',
+      _ket:         String(r.status ?? '').toUpperCase(), // 'TAMBAH' | 'KURANG'
+    }));
+
     // ── Hitung rekap ──────────────────────────────────────────
     const ceil = (v: number) => Math.round(v);
     let gadaiKeluar = 0, sjbKeluar = 0;
@@ -184,10 +200,10 @@ export async function GET(request: NextRequest) {
       cetakInfo: { tglCetak, jamCetak },
 
       // Detail lists untuk tabel cetak
-      // gadaiList & sjbList sudah di-filter: baris yg no_faktur-nya
-      // muncul sebagai PERPANJANG/TAMBAH/KURANG (dari tb_tebus)
-      // atau PERPANJANG (dari tb_buyback) tidak ditampilkan sebagai akad baru.
-      gadaiList:  gadaiFiltered,
+      // gadaiList: row akad baru (filter exclude yg hari ini PERPANJANG/TAMBAH/KURANG)
+      //           + row TAMBAH/KURANG (jumlah_gadai = jumlah_gadai_baru, _ket penanda)
+      // sjbList:  row akad SJB baru (filter exclude yg hari ini PERPANJANG)
+      gadaiList:  [...gadaiFiltered, ...tambahKurangInjected],
       sjbList:    sjbFiltered.map(r => ({ ...r, jumlah_gadai: r.harga_jual })),
       tebusList:  tebusRaw   ?? [],
       buybackList: buybackRaw ?? [],

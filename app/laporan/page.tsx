@@ -296,18 +296,23 @@ export default function LaporanPage() {
                 <tbody>
                   {gadaiList.length === 0 && sjbList.length === 0
                     ? <tr><td colSpan={8} style={{ padding: 20, textAlign: 'center', color: 'var(--text3)' }}>Tidak ada transaksi</td></tr>
-                    : [...gadaiList.map((r: any) => ({ ...r, _isSJB: false })), ...sjbList.map((r: any) => ({ ...r, _isSJB: true }))].map((r, i) => (
-                      <tr key={i} style={{ borderBottom: '1px solid rgba(46,51,73,.4)' }}>
-                        <td style={{ ...td, textAlign: 'center', color: 'var(--text3)', fontSize: 10 }}>{i + 1}</td>
-                        <td style={{ ...td, fontFamily: 'var(--mono)', fontSize: 10 }}>{r.no_faktur} {r._isSJB && <span className="badge" style={{ background: 'var(--warn)', color: '#fff', fontSize: 9, padding: '1px 4px' }}>SJB</span>}</td>
-                        <td style={td}><span className="badge aktif">{r.kategori}</span></td>
-                        <td style={{ ...td, fontSize: 11 }}>{r.barang}</td>
-                        <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmtRp(r.taksiran || r.harga_jual)}</td>
-                        <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--red)', fontWeight: 600 }}>{fmtRp(r.jumlah_gadai || r.harga_jual)}</td>
-                        <td style={{ ...td, fontSize: 9 }}>{r._isSJB ? 'SJB' : 'GADAI'}</td>
-                        <td style={td}>{payBadge(r.payment)}</td>
-                      </tr>
-                    ))}
+                    : [...gadaiList.map((r: any) => ({ ...r, _isSJB: false })), ...sjbList.map((r: any) => ({ ...r, _isSJB: true }))].map((r, i) => {
+                      const ket: string = r._ket || (r._isSJB ? 'SJB' : 'GADAI');
+                      const rowBg = ket === 'TAMBAH' ? 'rgba(16,185,129,.06)'
+                        : ket === 'KURANG' ? 'rgba(239,68,68,.06)' : undefined;
+                      return (
+                        <tr key={i} style={{ borderBottom: '1px solid rgba(46,51,73,.4)', ...(rowBg ? { background: rowBg } : {}) }}>
+                          <td style={{ ...td, textAlign: 'center', color: 'var(--text3)', fontSize: 10 }}>{i + 1}</td>
+                          <td style={{ ...td, fontFamily: 'var(--mono)', fontSize: 10 }}>{r.no_faktur} {r._isSJB && <span className="badge" style={{ background: 'var(--warn)', color: '#fff', fontSize: 9, padding: '1px 4px' }}>SJB</span>}</td>
+                          <td style={td}><span className="badge aktif">{r.kategori}</span></td>
+                          <td style={{ ...td, fontSize: 11 }}>{r.barang}</td>
+                          <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmtRp(r.taksiran || r.harga_jual)}</td>
+                          <td style={{ ...td, textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--red)', fontWeight: 600 }}>{fmtRp(r.jumlah_gadai || r.harga_jual)}</td>
+                          <td style={{ ...td, fontSize: 9 }}>{ket}</td>
+                          <td style={td}>{payBadge(r.payment)}</td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </Sec>

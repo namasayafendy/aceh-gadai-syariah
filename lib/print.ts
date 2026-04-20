@@ -714,7 +714,7 @@ export function printLaporanMalam(d: LaporanMalamPrintData) {
       + '<td>' + (r.barang || '—') + '</td>'
       + '<td class="num">' + R(r.taksiran || r.harga_jual) + '</td>'
       + '<td class="num" style="color:red;font-weight:bold">' + R(r.jumlah_gadai || r.harga_jual) + '</td>'
-      + '<td style="font-size:9px">' + (r._isSJB ? 'SJB' : 'GADAI') + '</td>'
+      + '<td style="font-size:9px">' + (r._ket || (r._isSJB ? 'SJB' : 'GADAI')) + '</td>'
       + '<td>' + (r.payment || 'CASH') + '</td></tr>'
     ).join('') + '</tbody></table>'
     // ── Tabel Tebus ──
