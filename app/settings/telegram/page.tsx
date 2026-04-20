@@ -149,7 +149,7 @@ export default function TelegramSettingsPage() {
 
   return (
     <AppShell title="Settings Telegram" subtitle="Konfigurasi bot untuk notifikasi transfer & approval diskon">
-      <div className="container" style={{ padding: 20, maxWidth: 1000 }}>
+      <div className="container" style={{ padding: 20, maxWidth: 1000, overflowY: 'auto', height: '100%' }}>
         <h1 style={{ marginBottom: 4 }}>⚙️ Settings Telegram</h1>
         <p style={{ color: 'var(--text3)', fontSize: 12, marginBottom: 20 }}>
           Konfigurasi bot Telegram untuk notifikasi transfer & approval diskon.
