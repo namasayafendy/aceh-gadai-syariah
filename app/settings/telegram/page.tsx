@@ -135,7 +135,7 @@ export default function TelegramSettingsPage() {
 
   if (!isOwner) {
     return (
-      <AppShell>
+      <AppShell title="Settings Telegram">
         <div className="container" style={{ padding: 40 }}>
           <h1>Akses Ditolak</h1>
           <p>Halaman ini hanya untuk Owner.</p>
@@ -148,7 +148,7 @@ export default function TelegramSettingsPage() {
   const botUsername = botInfo?.me?.username ?? '-';
 
   return (
-    <AppShell>
+    <AppShell title="Settings Telegram" subtitle="Konfigurasi bot untuk notifikasi transfer & approval diskon">
       <div className="container" style={{ padding: 20, maxWidth: 1000 }}>
         <h1 style={{ marginBottom: 4 }}>⚙️ Settings Telegram</h1>
         <p style={{ color: 'var(--text3)', fontSize: 12, marginBottom: 20 }}>
