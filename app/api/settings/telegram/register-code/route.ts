@@ -16,14 +16,14 @@ async function requireOwner(request: NextRequest): Promise<
 > {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, status: 401, msg: 'Sesi tidak valid.' };
+  if (!user) return { ok: false as const, status: 401, msg: 'Sesi tidak valid.' };
   const { data: profile } = await supabase
     .from('profiles').select('role, nama, status').eq('id', user.id).single();
   const p = profile as { role: string; nama: string; status: string } | null;
-  if (!p || p.status !== 'AKTIF') return { ok: false, status: 403, msg: 'Akun tidak aktif.' };
-  if (p.role !== 'OWNER') return { ok: false, status: 403, msg: 'Akses ditolak. Hanya Owner.' };
+  if (!p || p.status !== 'AKTIF') return { ok: false as const, status: 403, msg: 'Akun tidak aktif.' };
+  if (p.role !== 'OWNER') return { ok: false as const, status: 403, msg: 'Akses ditolak. Hanya Owner.' };
   const db = await createServiceClient();
-  return { ok: true, db, ownerName: p.nama };
+  return { ok: true as const, db, ownerName: p.nama };
 }
 
 function randomCode(): string {
