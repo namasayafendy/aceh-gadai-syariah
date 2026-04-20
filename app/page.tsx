@@ -174,11 +174,18 @@ export default function DashboardPage() {
     };
   };
 
-  // Split tebus by status — TEBUS/TAMBAH/KURANG semua dari tb_tebus (SJB tidak punya tambah/kurang)
-  const tebusOnly = tebusRaw.filter(r => {
-    const st = String(r.status ?? '').toUpperCase();
-    return ['TEBUS', 'TAMBAH', 'KURANG'].includes(st);
-  });
+  // Split tebus by status — TEBUS/TAMBAH/KURANG dari tb_tebus (gadai regular)
+  // + BUYBACK dari tb_buyback (SJB yg ditebus, secara logika sama dgn tebus biasa)
+  // SJB tidak punya TAMBAH/KURANG — hanya BUYBACK/PERPANJANG/SITA
+  const tebusOnly = [
+    ...tebusRaw.filter(r => {
+      const st = String(r.status ?? '').toUpperCase();
+      return ['TEBUS', 'TAMBAH', 'KURANG'].includes(st);
+    }),
+    ...buybackRaw
+      .filter(r => String(r.status ?? '').toUpperCase() === 'BUYBACK')
+      .map(mapBuybackRow),
+  ];
 
   // Perpanjang: gabung dari tb_tebus (gadai regular) + tb_buyback (SJB) — sesuai GAS allTebusLike
   const perpanjangList = [

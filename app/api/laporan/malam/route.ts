@@ -96,14 +96,40 @@ export async function GET(request: NextRequest) {
       db.rpc('get_saldo_kas', { p_outlet: outletName, p_tipe_kas: 'BANK', p_sampai: sampaiAkhirHari }),
     ]);
 
+    // ── Bangun exclusion set ──────────────────────────────────
+    // Gadai/SJB yg PERPANJANG/TAMBAH/KURANG hari ini → tgl_gadai di-reset
+    // ke hari ini, jadi akad lamanya ikut muncul di list "Gadai Baru".
+    // Sama seperti dashboard: eksklusi no_faktur yg dalam tebus/buyback
+    // hari ini berstatus PERPANJANG (utk SJB) atau PERPANJANG/TAMBAH/KURANG (utk tb_tebus).
+    // Catatan: SJB TIDAK punya status TAMBAH/KURANG (hanya BUYBACK/PERPANJANG/SITA).
+    const reissueNoFakturs = new Set<string>();
+    (tebusRaw ?? []).forEach(r => {
+      const st = String(r.status ?? '').toUpperCase();
+      if (st === 'PERPANJANG' || st === 'TAMBAH' || st === 'KURANG') {
+        reissueNoFakturs.add(String(r.no_faktur ?? '').trim().toUpperCase());
+      }
+    });
+    (buybackRaw ?? []).forEach(r => {
+      const st = String(r.status ?? '').toUpperCase();
+      if (st === 'PERPANJANG') {
+        reissueNoFakturs.add(String(r.no_faktur ?? '').trim().toUpperCase());
+      }
+    });
+
+    const isReissue = (r: any) =>
+      reissueNoFakturs.has(String(r.no_faktur ?? '').trim().toUpperCase());
+
+    const gadaiFiltered = (gadaiRaw ?? []).filter(r => !isReissue(r));
+    const sjbFiltered   = (sjbRaw   ?? []).filter(r => !isReissue(r));
+
     // ── Hitung rekap ──────────────────────────────────────────
     const ceil = (v: number) => Math.round(v);
     let gadaiKeluar = 0, sjbKeluar = 0;
     let tebusMasuk = 0, perpanjangMasuk = 0, buybackMasuk = 0;
     let labaTotal = 0;
 
-    (gadaiRaw ?? []).forEach(r => { gadaiKeluar += Number(r.jumlah_gadai ?? 0); });
-    (sjbRaw   ?? []).forEach(r => { sjbKeluar   += Number(r.harga_jual    ?? 0); });
+    gadaiFiltered.forEach(r => { gadaiKeluar += Number(r.jumlah_gadai ?? 0); });
+    sjbFiltered.forEach(r   => { sjbKeluar   += Number(r.harga_jual    ?? 0); });
 
     const allTebus = [
       ...(tebusRaw   ?? []).map(r => ({ ...r, _type: 'TEBUS' })),
@@ -158,8 +184,11 @@ export async function GET(request: NextRequest) {
       cetakInfo: { tglCetak, jamCetak },
 
       // Detail lists untuk tabel cetak
-      gadaiList:  gadaiRaw   ?? [],
-      sjbList:    (sjbRaw ?? []).map(r => ({ ...r, jumlah_gadai: r.harga_jual })),
+      // gadaiList & sjbList sudah di-filter: baris yg no_faktur-nya
+      // muncul sebagai PERPANJANG/TAMBAH/KURANG (dari tb_tebus)
+      // atau PERPANJANG (dari tb_buyback) tidak ditampilkan sebagai akad baru.
+      gadaiList:  gadaiFiltered,
+      sjbList:    sjbFiltered.map(r => ({ ...r, jumlah_gadai: r.harga_jual })),
       tebusList:  tebusRaw   ?? [],
       buybackList: buybackRaw ?? [],
       kasList:    kasRaw     ?? [],
