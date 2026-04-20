@@ -81,39 +81,45 @@ export default function DashboardPage() {
   const buybackRaw: any[] = raw?.buyback ?? [];
 
   // Merge gadai + sjb for the "Gadai Baru" table (SJB items get isSJB badge)
-  // Also inject TAMBAH/KURANG from tebus into gadai table
+  // Inject TAMBAH/KURANG dari tebus (gadai regular) ke gadai table.
+  // Catatan: SJB tidak punya TAMBAH/KURANG (cuma BUYBACK/PERPANJANG/SITA) — jadi
+  //          tb_buyback tidak perlu dicek utk tambah/kurang.
   const tambahKurangRows = tebusRaw.filter(r => {
     const st = String(r.status ?? '').toUpperCase();
     return st === 'TAMBAH' || st === 'KURANG';
   });
 
-  // Build the jumlahLamaMap for correcting gadai display amounts
+  // Build the jumlahLamaMap for correcting gadai display amounts (safety)
   const jumlahLamaMap: Record<string, number> = {};
   tambahKurangRows.forEach(r => {
     const nf = String(r.no_faktur ?? '').trim().toUpperCase();
     jumlahLamaMap[nf] = Number(r.jumlah_gadai ?? 0);
   });
 
-  // Build set of no_faktur yang sudah PERPANJANG hari ini (dari tb_tebus + tb_buyback)
-  // → supaya row ini tidak muncul lagi di "Gadai Baru" (cukup tampil di tabel Perpanjang)
-  const perpanjangNoFakturs = new Set<string>();
+  // Build set of no_faktur yang hari ini ada transaksi PERPANJANG / TAMBAH / KURANG
+  //   - tb_tebus  (gadai regular): PERPANJANG / TAMBAH / KURANG
+  //   - tb_buyback (SJB):          PERPANJANG saja (SJB tidak punya TAMBAH/KURANG)
+  // → row asli tidak perlu muncul lagi di tabel "Gadai Baru" (cukup di tabel Perpanjang
+  //   atau tampil sbg row TAMBAH/KURANG dgn jumlah baru)
+  const reissueNoFakturs = new Set<string>();
   tebusRaw.forEach(r => {
-    if (String(r.status ?? '').toUpperCase() === 'PERPANJANG') {
-      perpanjangNoFakturs.add(String(r.no_faktur ?? '').trim().toUpperCase());
+    const st = String(r.status ?? '').toUpperCase();
+    if (st === 'PERPANJANG' || st === 'TAMBAH' || st === 'KURANG') {
+      reissueNoFakturs.add(String(r.no_faktur ?? '').trim().toUpperCase());
     }
   });
   buybackRaw.forEach(r => {
     if (String(r.status ?? '').toUpperCase() === 'PERPANJANG') {
-      perpanjangNoFakturs.add(String(r.no_faktur ?? '').trim().toUpperCase());
+      reissueNoFakturs.add(String(r.no_faktur ?? '').trim().toUpperCase());
     }
   });
 
-  // Filter gadai/sjb: exclude yang hari ini cuma PERPANJANG
+  // Filter gadai/sjb: exclude yang hari ini cuma PERPANJANG/TAMBAH/KURANG
   const gadaiFiltered = gadaiRaw.filter(r =>
-    !perpanjangNoFakturs.has(String(r.no_faktur ?? '').trim().toUpperCase())
+    !reissueNoFakturs.has(String(r.no_faktur ?? '').trim().toUpperCase())
   );
   const sjbFiltered = sjbRaw.filter(r =>
-    !perpanjangNoFakturs.has(String(r.no_faktur ?? '').trim().toUpperCase())
+    !reissueNoFakturs.has(String(r.no_faktur ?? '').trim().toUpperCase())
   );
 
   // Build gadai table list
@@ -139,16 +145,11 @@ export default function DashboardPage() {
       jumlah_gadai: Number(r.jumlah_gadai_baru ?? 0),
       payment: r.payment ?? 'CASH',
       kasir: r.kasir ?? '',
-      _isSJB: false,
+      _isSJB: false,  // tambah/kurang hanya dari gadai regular (SJB tidak punya)
       _ket: String(r.status ?? '').toUpperCase(),
     })),
   ];
 
-  // Split tebus by status
-  const tebusOnly = tebusRaw.filter(r => {
-    const st = String(r.status ?? '').toUpperCase();
-    return ['TEBUS', 'TAMBAH', 'KURANG'].includes(st);
-  });
   // Helper: normalisasi row tb_buyback supaya kompatibel dengan TebusTable
   // tb_buyback kolom beda: harga_jual/harga_jual_baru (bukan jumlah_gadai),
   //                        total_sistem (bukan total_tebus_sistem),
@@ -172,6 +173,12 @@ export default function DashboardPage() {
       tgl_gadai:           derivedTglGadai,
     };
   };
+
+  // Split tebus by status — TEBUS/TAMBAH/KURANG semua dari tb_tebus (SJB tidak punya tambah/kurang)
+  const tebusOnly = tebusRaw.filter(r => {
+    const st = String(r.status ?? '').toUpperCase();
+    return ['TEBUS', 'TAMBAH', 'KURANG'].includes(st);
+  });
 
   // Perpanjang: gabung dari tb_tebus (gadai regular) + tb_buyback (SJB) — sesuai GAS allTebusLike
   const perpanjangList = [
@@ -206,7 +213,7 @@ export default function DashboardPage() {
   const sjbCount = sjbFiltered.length;
 
   // ── Rekap Masuk ──────────────────────────────────────────
-  // Sesuai GAS: status row di tb_buyback bisa BUYBACK / PERPANJANG / SITA / TAMBAH / KURANG
+  // Sesuai GAS: tb_buyback bisa berisi BUYBACK / PERPANJANG / SITA
   // → harus dipisah berdasarkan status, bukan dijumlah semua ke "Buyback"
   let tebusNom = 0, perpanjangNom = 0, buybackNom = 0;
   tebusRaw.forEach(r => {
@@ -217,21 +224,17 @@ export default function DashboardPage() {
     else if (st === 'TAMBAH') tebusNom += Math.max(0, Number(r.jumlah_gadai_baru ?? 0) - jb);
     else if (st === 'KURANG') tebusNom += jb + Number(r.jumlah_gadai_baru ?? 0);
   });
+  // tb_buyback hanya berisi BUYBACK / PERPANJANG / SITA — tidak ada TAMBAH/KURANG
   buybackRaw.forEach(r => {
     const st = String(r.status ?? '').toUpperCase();
     const jb = Number(r.jumlah_bayar ?? 0);
     if (st === 'BUYBACK') buybackNom += jb;
     else if (st === 'PERPANJANG') perpanjangNom += jb;
-    else if (st === 'TAMBAH') tebusNom += Math.max(0, Number(r.harga_jual_baru ?? 0) - jb);
-    else if (st === 'KURANG') tebusNom += jb + Number(r.harga_jual_baru ?? 0);
-    // SITA → no cash (0); JUAL → jualMasuk counted separately below
+    // SITA → no cash (0); JUAL (kalau ada) → jualMasuk via jualSitaList di bawah
   });
   const tebusCount = tebusRaw.filter(r => {
     const st = String(r.status ?? '').toUpperCase();
     return ['TEBUS', 'TAMBAH', 'KURANG'].includes(st);
-  }).length + buybackRaw.filter(r => {
-    const st = String(r.status ?? '').toUpperCase();
-    return ['TAMBAH', 'KURANG'].includes(st);
   }).length;
   const buybackCount = buybackRaw.filter(r =>
     String(r.status ?? '').toUpperCase() === 'BUYBACK'
