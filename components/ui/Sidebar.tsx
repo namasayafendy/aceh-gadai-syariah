@@ -28,6 +28,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/tebus',     icon: '🔓', label: 'Tebus / Perpanjang', section: 'Transaksi' },
   { href: '/sjb',       icon: '📄', label: 'Jual Titip (SJB)',   section: 'Transaksi' },
   { href: '/jatuhtempo',icon: '⏰', label: 'Jatuh Tempo',        section: 'Transaksi' },
+  { href: '/transfer',  icon: '🏦', label: 'Transfer Approval',  section: 'Transaksi' },
   { href: '/riwayat',   icon: '🔍', label: 'Cari Riwayat',       section: 'Transaksi' },
   // Gudang
   { href: '/stok',      icon: '📦', label: 'Cek Stok',           section: 'Gudang',  roles: ['ADMIN','OWNER'] },

@@ -36,6 +36,10 @@ export default function GadaiPage() {
   const [payment, setPayment] = useState<'CASH' | 'BANK' | 'SPLIT'>('CASH');
   const [cashRaw, setCashRaw] = useState('');
   const [bankRaw, setBankRaw] = useState('');
+  // Fase 2: transfer request fields (diaktifkan saat payment BANK/SPLIT w/ bank>0)
+  const [trfNama, setTrfNama] = useState('');
+  const [trfNoRek, setTrfNoRek] = useState('');
+  const [trfBank, setTrfBank] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
@@ -115,6 +119,15 @@ export default function GadaiPage() {
       const c = parseMoney(cashRaw), b = parseMoney(bankRaw);
       if ((c + b) !== jmlGadai) { setError(`Total split (${formatRp(c + b)}) harus = Jumlah Gadai (${formatRp(jmlGadai)})`); return; }
     }
+    // Fase 2: validasi transfer fields kalau ada bank > 0
+    const bankPortion = payment === 'BANK' ? jmlGadai : (payment === 'SPLIT' ? parseMoney(bankRaw) : 0);
+    if (bankPortion > 0) {
+      const trfErrs: string[] = [];
+      if (!trfNama.trim()) trfErrs.push('Nama Penerima Transfer');
+      if (!trfNoRek.trim()) trfErrs.push('No Rekening');
+      if (!trfBank.trim()) trfErrs.push('Bank');
+      if (trfErrs.length) { setError('Pembayaran via bank, field transfer wajib: ' + trfErrs.join(', ')); return; }
+    }
     setError(''); setPinOpen(true);
   }
 
@@ -137,7 +150,32 @@ export default function GadaiPage() {
       });
       const json = await res.json();
       if (!json.ok) { setError(json.msg || 'Gagal submit gadai'); setSubmitting(false); return; }
-      setSuccessData({ ...json, kasir: kasirName });
+      // ── Fase 2: fire transfer request jika payment punya bank portion ──
+      // Fire-and-forget style: gadai sudah sukses, notif gagal tidak blok
+      const bankPortion = payment === 'BANK' ? jmlGadai : (payment === 'SPLIT' ? parseMoney(bankRaw) : 0);
+      let trfInfo: { notifSent: boolean; id?: number; msg?: string } | null = null;
+      if (bankPortion > 0 && trfNama.trim() && trfNoRek.trim() && trfBank.trim()) {
+        try {
+          const trfRes = await fetch('/api/transfer/request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-outlet-id': String(outletId) },
+            body: JSON.stringify({
+              pin, tipe: 'GADAI',
+              refTable: 'tb_gadai', refNoFaktur: json.noFaktur, refId: null,
+              nominal: bankPortion,
+              namaPenerima: trfNama.trim(), noRek: trfNoRek.trim(), bank: trfBank.trim(),
+              namaNasabah: nama.trim(), barang: barang.trim(),
+            }),
+          });
+          const trfJson = await trfRes.json();
+          trfInfo = trfJson.ok
+            ? { notifSent: !!trfJson.notifSent, id: trfJson.id, msg: trfJson.msg }
+            : { notifSent: false, msg: trfJson.msg ?? 'Gagal kirim notif transfer' };
+        } catch (e) {
+          trfInfo = { notifSent: false, msg: 'Error notif: ' + (e as Error).message };
+        }
+      }
+      setSuccessData({ ...json, kasir: kasirName, transfer: trfInfo });
       resetForm(); loadTodayList();
     } catch (e) { setError('Server error: ' + (e as Error).message); }
     setSubmitting(false);
@@ -151,6 +189,7 @@ export default function GadaiPage() {
     setUjrahPersen(''); setUjrahNominalRaw('');
     setUjrahManual(false); setPersenManual(false);
     setPayment('CASH'); setCashRaw(''); setBankRaw(''); setError('');
+    setTrfNama(''); setTrfNoRek(''); setTrfBank('');
   }
 
   const showCalc = !!(kategori && taksiran && jmlGadai && jmlGadai <= taksiran);
@@ -219,6 +258,18 @@ export default function GadaiPage() {
           <div className="payment-tabs">{(['CASH','BANK','SPLIT'] as const).map(m => <div key={m} className={`ptab ${payment===m?'active':''}`} onClick={() => setPayment(m)}>{m==='CASH'?'💵 CASH':m==='BANK'?'🏦 BANK':'💵+🏦 SPLIT'}</div>)}</div>
           {payment === 'SPLIT' && <div className="form-row"><div className="form-group"><label>Cash</label><input value={cashRaw} inputMode="numeric" onChange={e => setCashRaw(formatMoneyInputSigned(e.target.value))} /></div><div className="form-group"><label>Bank</label><input value={bankRaw} inputMode="numeric" onChange={e => setBankRaw(formatMoneyInput(e.target.value))} /></div></div>}
           {payment === 'SPLIT' && <div style={{fontSize:11,color:'var(--text3)'}}>Total split: {formatRp(parseMoney(cashRaw)+parseMoney(bankRaw))}</div>}
+          {/* Fase 2: fields transfer — muncul saat payment bank > 0 */}
+          {(payment === 'BANK' || (payment === 'SPLIT' && parseMoney(bankRaw) > 0)) && (
+            <div style={{ marginTop: 10, padding: 10, background: 'var(--surface2)', borderRadius: 6, border: '1px dashed var(--border)' }}>
+              <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>🏦 Data Transfer (untuk approval via Telegram)</div>
+              <div className="form-row">
+                <div className="form-group"><label>Nama Penerima *</label><input value={trfNama} onChange={e => setTrfNama(e.target.value.toUpperCase())} placeholder="Sesuai rekening" /></div>
+                <div className="form-group"><label>Bank *</label><input value={trfBank} onChange={e => setTrfBank(e.target.value.toUpperCase())} placeholder="mis. BSI, BCA" /></div>
+              </div>
+              <div className="form-group"><label>No Rekening *</label><input value={trfNoRek} onChange={e => setTrfNoRek(e.target.value)} placeholder="No rekening" inputMode="numeric" /></div>
+              <div style={{ fontSize: 10, color: 'var(--text3)' }}>Notif akan dikirim ke grup Telegram outlet setelah gadai tersimpan.</div>
+            </div>
+          )}
           {error && <div className="alert-error">⚠️ {error}</div>}
           <div className="submit-area"><button className="btn btn-success btn-full" onClick={requestSubmit} disabled={submitting}>{submitting ? '⏳ Menyimpan...' : '💰 SUBMIT GADAI'}</button></div>
         </div>
@@ -235,6 +286,15 @@ export default function GadaiPage() {
         <div className="success-overlay" onClick={() => setSuccessData(null)}><div className="success-modal" onClick={e => e.stopPropagation()}>
           <div className="check">✅</div><h3>Gadai Berhasil Disimpan!</h3>
           <div className="info-grid">{[['No Faktur',successData.noFaktur],['Tgl Gadai',successData.tglGadai],['Jatuh Tempo',successData.tglJT],['Tgl Sita',successData.tglSita],['Rak',successData.locationGudang||'—'],['Kasir',successData.kasir]].map(([l,v])=><div className="info-row" key={l}><span className="info-label">{l}</span><span className="info-val">{v||'—'}</span></div>)}</div>
+          {successData.transfer && (
+            <div style={{ marginTop: 10, padding: 10, borderRadius: 6, fontSize: 12,
+              background: successData.transfer.notifSent ? 'var(--green-dim)' : 'var(--yellow-dim)',
+              color: successData.transfer.notifSent ? 'var(--green)' : 'var(--yellow)' }}>
+              {successData.transfer.notifSent
+                ? `📲 Notif transfer TRF-${successData.transfer.id} terkirim ke grup Telegram outlet.`
+                : `⚠️ Notif transfer belum terkirim: ${successData.transfer.msg ?? 'unknown'}`}
+            </div>
+          )}
           <div className="success-actions">
             <button className="btn btn-primary btn-full" onClick={() => {
               const printData = { ...successData, ujrahNominal: successData.ujrahNominal || ujrahNominal, ujrahPersen: successData.ujrahPersen || ujrahPersen, biayaAdmin: 10000 };

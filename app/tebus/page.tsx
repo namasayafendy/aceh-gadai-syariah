@@ -66,6 +66,11 @@ export default function TebusPage() {
   const [cashRaw, setCashRaw] = useState('');
   const [bankRaw, setBankRaw] = useState('');
 
+  // Fase 2: transfer request fields (hanya untuk TAMBAH + bank > 0)
+  const [trfNama, setTrfNama] = useState('');
+  const [trfNoRek, setTrfNoRek] = useState('');
+  const [trfBank, setTrfBank] = useState('');
+
   // UI
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -269,6 +274,17 @@ export default function TebusPage() {
         }
       }
     }
+    // Fase 2: validasi transfer untuk TAMBAH + bank > 0
+    if (tebusStatus === 'TAMBAH') {
+      const bankPortion = payment === 'BANK' ? jmlBayar : (payment === 'SPLIT' ? parseMoney(bankRaw) : 0);
+      if (bankPortion > 0) {
+        const te: string[] = [];
+        if (!trfNama.trim()) te.push('Nama Penerima Transfer');
+        if (!trfNoRek.trim()) te.push('No Rekening');
+        if (!trfBank.trim()) te.push('Bank');
+        if (te.length) { setError('Pembayaran via bank, field transfer wajib: ' + te.join(', ')); return; }
+      }
+    }
     setError('');
     setPinOpen(true);
   }
@@ -310,6 +326,30 @@ export default function TebusPage() {
       const json = await res.json();
       if (!json.ok) { setError(json.msg || 'Gagal submit'); setSubmitting(false); return; }
 
+      // ── Fase 2: fire transfer request untuk TAMBAH dengan bank > 0 ──
+      let trfInfo: { notifSent: boolean; id?: number; msg?: string } | null = null;
+      if (tebusStatus === 'TAMBAH' && bankVal > 0 && trfNama.trim() && trfNoRek.trim() && trfBank.trim()) {
+        try {
+          const trfRes = await fetch('/api/transfer/request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-outlet-id': String(outletId) },
+            body: JSON.stringify({
+              pin, tipe: 'TAMBAH',
+              refTable: 'tb_tebus', refNoFaktur: d.no_faktur, refId: null,
+              nominal: bankVal,
+              namaPenerima: trfNama.trim(), noRek: trfNoRek.trim(), bank: trfBank.trim(),
+              namaNasabah: d.nama, barang: d.barang,
+            }),
+          });
+          const trfJson = await trfRes.json();
+          trfInfo = trfJson.ok
+            ? { notifSent: !!trfJson.notifSent, id: trfJson.id, msg: trfJson.msg }
+            : { notifSent: false, msg: trfJson.msg ?? 'Gagal kirim notif transfer' };
+        } catch (e) {
+          trfInfo = { notifSent: false, msg: 'Error notif: ' + (e as Error).message };
+        }
+      }
+
       // ── Simpan SEMUA data print SEBELUM reset ──
       // Karena resetForm() akan clear gadaiData & semua state
       const selisihVal = totalSistem > 0 ? totalSistem - jmlBayar : 0;
@@ -317,6 +357,7 @@ export default function TebusPage() {
         ...json,
         kasir: kasirName,
         status: tebusStatus,
+        transfer: trfInfo,
         // Data gadai yang diperlukan untuk cetak nota
         _print: {
           noFaktur: d.no_faktur,
@@ -363,6 +404,7 @@ export default function TebusPage() {
     setTaksiranJualRaw(''); setTaksiranSitaRaw('');
     setJmlBayarRaw(''); setAlasan('');
     setPayment('CASH'); setCashRaw(''); setBankRaw('');
+    setTrfNama(''); setTrfNoRek(''); setTrfBank('');
   }
 
   const showBaru = ['TAMBAH', 'KURANG'].includes(tebusStatus);
@@ -590,6 +632,19 @@ export default function TebusPage() {
                         Total split: {formatRp(parseMoney(cashRaw) + parseMoney(bankRaw))}
                       </div>
                     </>
+                  )}
+
+                  {/* Fase 2: field transfer — hanya TAMBAH + ada bank portion */}
+                  {tebusStatus === 'TAMBAH' && (payment === 'BANK' || (payment === 'SPLIT' && parseMoney(bankRaw) > 0)) && (
+                    <div style={{ marginTop: 10, padding: 10, background: 'var(--surface2)', borderRadius: 6, border: '1px dashed var(--border)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>🏦 Data Transfer (untuk approval via Telegram)</div>
+                      <div className="form-row">
+                        <div className="form-group"><label>Nama Penerima *</label><input value={trfNama} onChange={e => setTrfNama(e.target.value.toUpperCase())} placeholder="Sesuai rekening" /></div>
+                        <div className="form-group"><label>Bank *</label><input value={trfBank} onChange={e => setTrfBank(e.target.value.toUpperCase())} placeholder="mis. BSI, BCA" /></div>
+                      </div>
+                      <div className="form-group"><label>No Rekening *</label><input value={trfNoRek} onChange={e => setTrfNoRek(e.target.value)} placeholder="No rekening" inputMode="numeric" /></div>
+                      <div style={{ fontSize: 10, color: 'var(--text3)' }}>Notif akan dikirim ke grup Telegram outlet setelah tambah pinjaman tersimpan.</div>
+                    </div>
                   )}
                 </>
               )}

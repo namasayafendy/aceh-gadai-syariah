@@ -11,7 +11,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
-import { sendTelegram, escapeMd, answerCallback } from '@/lib/telegram';
+import {
+  sendTelegram, escapeMd, answerCallback,
+  editMessage, editMessageKeyboard, downloadTelegramFile, formatRpMd,
+} from '@/lib/telegram';
 
 const SECRET_HEADER = 'x-telegram-bot-api-secret-token';
 
@@ -116,16 +119,114 @@ async function handleMessage(db: any, msg: any) {
     );
   }
 
-  // ── Photo reply (bukti transfer) — scaffold Fase 2 ──
+  // ── Photo reply (bukti transfer) ──
   if (msg.photo && Array.isArray(msg.photo) && msg.reply_to_message) {
-    // TODO Fase 2: cocokkan reply_to_message ke tb_transfer_request
-    // berdasarkan telegram_message_id → download foto → upload Storage → update status
-    console.log('[telegram] photo reply (Fase 2):',
-      msg.reply_to_message.message_id,
-      'photos:', msg.photo.length);
+    return handlePhotoBukti(db, msg);
   }
 
   // Pesan lain di grup di-ignore
+}
+
+// ── Photo reply handler: bukti transfer ──
+async function handlePhotoBukti(db: any, msg: any) {
+  const chatId = msg.chat?.id;
+  const replyToId = msg.reply_to_message?.message_id;
+  const fromUsername = msg.from?.username ?? null;
+  const fromUserId = msg.from?.id ?? null;
+
+  if (!chatId || !replyToId) return;
+
+  // Cari transfer request yang di-reply
+  const { data: reqRow } = await db.from('tb_transfer_request')
+    .select('*')
+    .eq('telegram_chat_id', chatId)
+    .eq('telegram_message_id', replyToId)
+    .maybeSingle();
+
+  if (!reqRow) return; // bukan reply ke pesan transfer request
+
+  const req = reqRow as any;
+
+  if (req.status === 'DONE') {
+    return sendTelegram(chatId,
+      escapeMd(`ℹ️ Bukti untuk TRF-${req.id} sudah pernah diupload.`),
+      { parseMode: 'MarkdownV2', replyTo: msg.message_id });
+  }
+  if (req.status === 'REJECTED') {
+    return sendTelegram(chatId,
+      escapeMd(`⚠️ TRF-${req.id} sudah di-REJECT. Tidak bisa upload bukti.`),
+      { parseMode: 'MarkdownV2', replyTo: msg.message_id });
+  }
+  if (req.status !== 'APPROVED') {
+    return sendTelegram(chatId,
+      escapeMd(`⚠️ TRF-${req.id} belum di-APPROVE. Tekan tombol APPROVE dulu sebelum upload bukti.`),
+      { parseMode: 'MarkdownV2', replyTo: msg.message_id });
+  }
+
+  // Ambil photo ukuran terbesar (Telegram kirim beberapa size)
+  const biggest = msg.photo.reduce((a: any, b: any) =>
+    (a.file_size ?? 0) > (b.file_size ?? 0) ? a : b);
+  const fileId: string = biggest?.file_id;
+  if (!fileId) return;
+
+  // Download dari Telegram
+  const dl = await downloadTelegramFile(fileId);
+  if (!dl) {
+    return sendTelegram(chatId,
+      escapeMd(`❌ Gagal download foto dari Telegram. Coba upload ulang.`),
+      { parseMode: 'MarkdownV2', replyTo: msg.message_id });
+  }
+
+  // Upload ke Supabase Storage — reuse bucket 'backups'
+  // Path: {outletName}/bukti-transfer/{yyyy-MM}/TRF-{id}_{stamp}.jpg
+  const { data: outlet } = await db.from('outlets')
+    .select('nama').eq('id', req.outlet_id).single();
+  const outletName = ((outlet as any)?.nama ?? `outlet-${req.outlet_id}`)
+    .toString().replace(/[^A-Za-z0-9_-]/g, '_').toUpperCase();
+  const ym = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }).substring(0, 7);
+  const stamp = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' })
+    .replace(/[: ]/g, '').replace(/-/g, '').substring(0, 13);
+  const ext = (dl.contentType.includes('png') ? 'png' : 'jpg');
+  const path = `${outletName}/bukti-transfer/${ym}/TRF-${req.id}_${stamp}.${ext}`;
+
+  const { error: upErr } = await db.storage.from('backups')
+    .upload(path, Buffer.from(dl.buffer), { contentType: dl.contentType, upsert: true });
+  if (upErr) {
+    return sendTelegram(chatId,
+      escapeMd(`❌ Gagal simpan bukti: ${upErr.message}`),
+      { parseMode: 'MarkdownV2', replyTo: msg.message_id });
+  }
+
+  // Update record → DONE
+  await db.from('tb_transfer_request').update({
+    status: 'DONE',
+    bukti_file_id: fileId,
+    bukti_storage_path: path,
+    bukti_uploaded_at: new Date().toISOString(),
+    bukti_uploaded_by_username: fromUsername,
+  }).eq('id', req.id);
+
+  // Edit pesan utama → status DONE
+  try {
+    const doneMsg =
+      `*✅ TRANSFER SELESAI*\n` +
+      `\n` +
+      `*TRF\\-${req.id}* \\| ${escapeMd(req.tipe)} ${escapeMd(req.ref_no_faktur ?? '')}\n` +
+      `Nominal: Rp ${formatRpMd(Number(req.nominal))}\n` +
+      `Ke: ${escapeMd(req.nama_penerima)} \\(${escapeMd(req.bank)} ${escapeMd(req.no_rek)}\\)\n` +
+      `\n` +
+      `_Bukti diupload oleh:_ ${escapeMd(fromUsername ? '@' + fromUsername : '(anon)')}\n` +
+      `_Waktu:_ ${escapeMd(new Date().toLocaleString('id-ID'))}`;
+    await editMessage(chatId, replyToId, doneMsg, { parseMode: 'MarkdownV2' });
+    await editMessageKeyboard(chatId, replyToId, { inline_keyboard: [] });
+  } catch (e) {
+    console.error('[telegram] editMessage DONE failed:', e);
+  }
+
+  // Reply konfirmasi
+  return sendTelegram(chatId,
+    `✅ *Bukti tersimpan* untuk TRF\\-${req.id}`,
+    { parseMode: 'MarkdownV2', replyTo: msg.message_id });
 }
 
 // ── /register KODE ──
@@ -194,8 +295,138 @@ async function handleRegister(db: any, chatId: number, kode: string, msg: any) {
 
 // ── Callback query handler (tap tombol inline) ──
 async function handleCallback(db: any, cb: any) {
-  // Scaffold untuk Fase 2 & 3 — untuk sekarang acknowledge saja
-  await answerCallback(cb.id, 'Fitur ini akan aktif di update berikutnya', false);
+  const data: string = cb.data ?? '';
+  const parts = data.split(':');
+  const action = parts[0]; // 'approve' | 'reject'
+  const kind = parts[1];   // 'TRF' | (future: 'DSC')
+  const idNum = Number(parts[2] ?? 0);
+
+  const fromUsername: string | null = cb.from?.username ?? null;
+  const fromUserId: number | null = cb.from?.id ?? null;
+
+  // Auto-fill telegram_user_id di approvers (case-insensitive match by username)
+  if (fromUsername && fromUserId) {
+    await db.from('telegram_approvers')
+      .update({ telegram_user_id: fromUserId })
+      .ilike('username', fromUsername)
+      .is('telegram_user_id', null)
+      .then(() => {}, () => {});
+  }
+
+  // Validate approver: username (case-insensitive) atau user_id cocok, active=true
+  let isApprover = false;
+  if (fromUserId) {
+    const { data: byId } = await db.from('telegram_approvers')
+      .select('id, nama, active').eq('telegram_user_id', fromUserId).maybeSingle();
+    if (byId && (byId as any).active) isApprover = true;
+  }
+  if (!isApprover && fromUsername) {
+    const { data: byName } = await db.from('telegram_approvers')
+      .select('id, nama, active').ilike('username', fromUsername).maybeSingle();
+    if (byName && (byName as any).active) isApprover = true;
+  }
+  if (!isApprover) {
+    return answerCallback(cb.id, '❌ Anda bukan approver. Hubungi Owner.', true);
+  }
+
+  // ── Transfer request approve/reject ──
+  if (kind === 'TRF' && idNum > 0 && (action === 'approve' || action === 'reject')) {
+    return handleTransferDecision(db, cb, idNum, action, fromUsername, fromUserId);
+  }
+
+  return answerCallback(cb.id, 'Fitur belum tersedia', false);
+}
+
+async function handleTransferDecision(
+  db: any, cb: any, requestId: number,
+  action: 'approve' | 'reject',
+  fromUsername: string | null,
+  fromUserId: number | null,
+) {
+  const chatId = cb.message?.chat?.id;
+  const messageId = cb.message?.message_id;
+
+  const { data: reqRow } = await db.from('tb_transfer_request')
+    .select('*').eq('id', requestId).maybeSingle();
+  if (!reqRow) {
+    return answerCallback(cb.id, `❌ Request TRF-${requestId} tidak ditemukan.`, true);
+  }
+  const req = reqRow as any;
+
+  if (req.status !== 'PENDING') {
+    return answerCallback(cb.id,
+      `ℹ️ Request sudah diproses (${req.status}).`, true);
+  }
+
+  const nowIso = new Date().toISOString();
+  const approverTag = fromUsername ? `@${fromUsername}` : `(user ${fromUserId})`;
+
+  if (action === 'approve') {
+    await db.from('tb_transfer_request').update({
+      status: 'APPROVED',
+      approved_by_username: fromUsername,
+      approved_by_user_id: fromUserId,
+      approved_at: nowIso,
+    }).eq('id', requestId);
+
+    // Update last_action_at di approver
+    if (fromUserId) {
+      await db.from('telegram_approvers').update({ last_action_at: nowIso })
+        .eq('telegram_user_id', fromUserId).then(() => {}, () => {});
+    }
+
+    const body =
+      `*✅ TRANSFER DI\\-APPROVE*\n\n` +
+      `*TRF\\-${req.id}* \\| ${escapeMd(req.tipe)} ${escapeMd(req.ref_no_faktur ?? '')}\n` +
+      `Nominal: Rp ${formatRpMd(Number(req.nominal))}\n` +
+      `Ke: ${escapeMd(req.nama_penerima)} \\(${escapeMd(req.bank)} ${escapeMd(req.no_rek)}\\)\n\n` +
+      `_Disetujui oleh:_ ${escapeMd(approverTag)}\n` +
+      `_Waktu:_ ${escapeMd(new Date().toLocaleString('id-ID'))}\n\n` +
+      `📸 *Upload foto bukti dengan REPLY ke pesan ini\\.*`;
+
+    try {
+      if (chatId && messageId) {
+        await editMessage(chatId, messageId, body, { parseMode: 'MarkdownV2' });
+        await editMessageKeyboard(chatId, messageId, { inline_keyboard: [] });
+      }
+    } catch (e) {
+      console.error('[telegram] editMessage APPROVED failed:', e);
+    }
+
+    return answerCallback(cb.id, '✅ Transfer di-approve. Silakan transfer lalu reply foto bukti.', false);
+  }
+
+  // REJECT
+  await db.from('tb_transfer_request').update({
+    status: 'REJECTED',
+    rejected_by_username: fromUsername,
+    rejected_by_user_id: fromUserId,
+    rejected_at: nowIso,
+  }).eq('id', requestId);
+
+  if (fromUserId) {
+    await db.from('telegram_approvers').update({ last_action_at: nowIso })
+      .eq('telegram_user_id', fromUserId).then(() => {}, () => {});
+  }
+
+  const body =
+    `*❌ TRANSFER DI\\-REJECT*\n\n` +
+    `*TRF\\-${req.id}* \\| ${escapeMd(req.tipe)} ${escapeMd(req.ref_no_faktur ?? '')}\n` +
+    `Nominal: Rp ${formatRpMd(Number(req.nominal))}\n` +
+    `Ke: ${escapeMd(req.nama_penerima)} \\(${escapeMd(req.bank)} ${escapeMd(req.no_rek)}\\)\n\n` +
+    `_Ditolak oleh:_ ${escapeMd(approverTag)}\n` +
+    `_Waktu:_ ${escapeMd(new Date().toLocaleString('id-ID'))}`;
+
+  try {
+    if (chatId && messageId) {
+      await editMessage(chatId, messageId, body, { parseMode: 'MarkdownV2' });
+      await editMessageKeyboard(chatId, messageId, { inline_keyboard: [] });
+    }
+  } catch (e) {
+    console.error('[telegram] editMessage REJECTED failed:', e);
+  }
+
+  return answerCallback(cb.id, '❌ Transfer di-reject.', false);
 }
 
 // Telegram kadang kirim GET saat test endpoint

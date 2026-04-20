@@ -22,6 +22,7 @@ const BACKUP_TABLES = [
   'tb_kas', 'tb_gudang_sita', 'tb_serah_terima',
   'tb_gudang_aset', 'tb_jual_bon', 'tb_jual_bon_detail',
   'tb_diskon', 'karyawan', 'tb_rak',
+  'tb_transfer_request',            // Fase 2: audit transfer approval
 ] as const;
 
 export interface BackupResult {
@@ -61,7 +62,7 @@ export async function runNightlyBackup(db: SupabaseClient): Promise<BackupResult
       for (const tabel of BACKUP_TABLES) {
         try {
           let query;
-          if (['tb_gadai', 'tb_sjb', 'tb_rak'].includes(tabel)) {
+          if (['tb_gadai', 'tb_sjb', 'tb_rak', 'tb_transfer_request'].includes(tabel)) {
             query = db.from(tabel).select('*').eq('outlet_id', outletId);
           } else if (tabel === 'karyawan') {
             query = db.from(tabel).select('*')
@@ -192,6 +193,11 @@ function buildLaporanMalamHtml(
     ${[...tebusRows, ...buybackRows].map(r => `<tr><td style="${td}">${r.no_faktur ?? ''}</td><td style="${td}">${r.nama_nasabah ?? r.nama ?? ''}</td><td style="${td}">${r.status ?? ''}</td><td style="${td};text-align:right;font-family:monospace">${fmtRp(r.jumlah_bayar)}</td><td style="${td}">${r.kasir ?? ''}</td></tr>`).join('')}
     </tbody></table>`}
     <p style="font-size:10px;color:#999;margin-top:20px;border-top:1px solid #eee;padding-top:8px">
+      File ini dibuat otomatis oleh sistem Aceh Gadai Syariah.
+    </p>
+  </body></html>`;
+}
+
       File ini dibuat otomatis oleh sistem Aceh Gadai Syariah.
     </p>
   </body></html>`;

@@ -41,6 +41,10 @@ export default function SJBPage() {
   const [akadPayment, setAkadPayment] = useState<'CASH' | 'BANK' | 'SPLIT'>('CASH');
   const [akadCashRaw, setAkadCashRaw] = useState('');
   const [akadBankRaw, setAkadBankRaw] = useState('');
+  // Fase 2: transfer fields untuk Akad SJB (saat bank > 0)
+  const [akadTrfNama, setAkadTrfNama] = useState('');
+  const [akadTrfNoRek, setAkadTrfNoRek] = useState('');
+  const [akadTrfBank, setAkadTrfBank] = useState('');
   const [akadError, setAkadError] = useState('');
   const [akadSubmitting, setAkadSubmitting] = useState(false);
   const [akadPinOpen, setAkadPinOpen] = useState(false);
@@ -71,6 +75,7 @@ export default function SJBPage() {
     setKategori(''); setGrade(''); setBarang(''); setKelengkapan(''); setImeiSn('');
     setHargaJualRaw(''); setLamaTitip('30'); setHargaBuybackRaw('');
     setAkadPayment('CASH'); setAkadCashRaw(''); setAkadBankRaw(''); setAkadError('');
+    setAkadTrfNama(''); setAkadTrfNoRek(''); setAkadTrfBank('');
   }
 
   function requestSubmitAkad() {
@@ -90,6 +95,15 @@ export default function SJBPage() {
       if (Math.abs(c + b - hargaJual) > 1) {
         setAkadError(`Total split (${formatRp(c + b)}) harus = Harga Jual (${formatRp(hargaJual)})`); return;
       }
+    }
+    // Fase 2: validasi transfer saat ada bank portion
+    const bankPortion = akadPayment === 'BANK' ? hargaJual : (akadPayment === 'SPLIT' ? parseMoney(akadBankRaw) : 0);
+    if (bankPortion > 0) {
+      const te: string[] = [];
+      if (!akadTrfNama.trim()) te.push('Nama Penerima Transfer');
+      if (!akadTrfNoRek.trim()) te.push('No Rekening');
+      if (!akadTrfBank.trim()) te.push('Bank');
+      if (te.length) { setAkadError('Pembayaran via bank, field transfer wajib: ' + te.join(', ')); return; }
     }
     setAkadError(''); setAkadPinOpen(true);
   }
@@ -112,10 +126,33 @@ export default function SJBPage() {
       });
       const json = await res.json();
       if (!json.ok) { setAkadError(json.msg || 'Gagal submit'); setAkadSubmitting(false); return; }
+      // ── Fase 2: fire transfer request jika Akad punya bank portion ──
+      let trfInfo: { notifSent: boolean; id?: number; msg?: string } | null = null;
+      if (bankVal > 0 && akadTrfNama.trim() && akadTrfNoRek.trim() && akadTrfBank.trim()) {
+        try {
+          const trfRes = await fetch('/api/transfer/request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-outlet-id': String(outletId) },
+            body: JSON.stringify({
+              pin, tipe: 'SJB',
+              refTable: 'tb_sjb', refNoFaktur: json.noFaktur, refId: null,
+              nominal: bankVal,
+              namaPenerima: akadTrfNama.trim(), noRek: akadTrfNoRek.trim(), bank: akadTrfBank.trim(),
+              namaNasabah: nama.trim(), barang: barang.trim(),
+            }),
+          });
+          const trfJson = await trfRes.json();
+          trfInfo = trfJson.ok
+            ? { notifSent: !!trfJson.notifSent, id: trfJson.id, msg: trfJson.msg }
+            : { notifSent: false, msg: trfJson.msg ?? 'Gagal kirim notif transfer' };
+        } catch (e) {
+          trfInfo = { notifSent: false, msg: 'Error notif: ' + (e as Error).message };
+        }
+      }
       // BUG FIX: simpan semua data dari response SEBELUM reset form
       // API response sudah include: nama, noKtp, kategori, barang, grade,
       // kelengkapan, imeiSn, hargaJual, hargaBuyback, lamaTitip, locationGudang, dll
-      setAkadSuccess({ ...json, kasir: kasirName, telp1: telp1.trim(), alamatNasabah: alamatNasabah.trim() });
+      setAkadSuccess({ ...json, kasir: kasirName, telp1: telp1.trim(), alamatNasabah: alamatNasabah.trim(), transfer: trfInfo });
       resetAkadForm(); loadAkadToday();
     } catch (e) { setAkadError('Server error: ' + (e as Error).message); }
     setAkadSubmitting(false);
@@ -373,6 +410,19 @@ export default function SJBPage() {
               </div>
             )}
 
+            {/* Fase 2: field transfer — muncul saat ada bank portion */}
+            {(akadPayment === 'BANK' || (akadPayment === 'SPLIT' && parseMoney(akadBankRaw) > 0)) && (
+              <div style={{ marginTop: 10, padding: 10, background: 'var(--surface2)', borderRadius: 6, border: '1px dashed var(--border)' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>🏦 Data Transfer (untuk approval via Telegram)</div>
+                <div className="form-row">
+                  <div className="form-group"><label>Nama Penerima *</label><input value={akadTrfNama} onChange={e => setAkadTrfNama(e.target.value.toUpperCase())} placeholder="Sesuai rekening" /></div>
+                  <div className="form-group"><label>Bank *</label><input value={akadTrfBank} onChange={e => setAkadTrfBank(e.target.value.toUpperCase())} placeholder="mis. BSI, BCA" /></div>
+                </div>
+                <div className="form-group"><label>No Rekening *</label><input value={akadTrfNoRek} onChange={e => setAkadTrfNoRek(e.target.value)} placeholder="No rekening" inputMode="numeric" /></div>
+                <div style={{ fontSize: 10, color: 'var(--text3)' }}>Notif akan dikirim ke grup Telegram outlet setelah SJB tersimpan.</div>
+              </div>
+            )}
+
             {akadError && <div className="alert-error">{akadError}</div>}
             <div className="submit-area">
               <button className="btn btn-primary btn-full" onClick={requestSubmitAkad} disabled={akadSubmitting}>
@@ -588,6 +638,65 @@ export default function SJBPage() {
                   noKtp: bbSuccess._noKtp || '', telp1: bbSuccess._telp1 || '',
                   kategori: bbSuccess._kategori || '', barang: bbSuccess._barang || '',
                   hargaJual: bbSuccess._hargaJual || 0,
+                  hariAktual: bbSuccess._hariAktual || 0,
+                  ujrahBerjalan: bbSuccess._totalSistem || 0,
+                  totalSistem: bbSuccess._totalSistem || 0,
+                  jumlahBayar: bbSuccess._jumlahBayar || 0,
+                  selisih: selisih,
+                  alasan: bbSuccess._alasan || '',
+                  idDiskon: bbSuccess.idDiskon || '',
+                  tanpaSurat: bbSuccess.tanpaSurat || false,
+                  idKehilangan: bbSuccess.idKehilangan || '',
+                  locationGudang: bbSuccess._locationGudang || '',
+                  kasir: bbSuccess.kasir || '',
+                  outlet: bbSuccess.outlet || '',
+                  alamat: bbSuccess.alamat || '',
+                  kota: bbSuccess.kota || '',
+                  telpon: bbSuccess.telpon || '',
+                  namaPerusahaan: bbSuccess.namaPerusahaan || 'PT. ACEH GADAI SYARIAH',
+                  waktuOperasional: bbSuccess.waktuOperasional || '',
+                  // Cetak Nota = HANYA nota + surat diskon + surat kehilangan, TANPA kontrak baru
+                  cetakKontrak: false,
+                });
+                // Backup nota ke Supabase Storage (fire-and-forget)
+                fetch('/api/backup/kontrak', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json', 'x-outlet-id': String(outletId) },
+                  body: JSON.stringify({ tipe: 'BUYBACK', noFaktur: bbSuccess.noSJB || bbSuccess._noSJB || '', ...bbSuccess }),
+                }).catch(() => {});
+              }}>Cetak Nota</button>
+              {bbSuccess.status === 'PERPANJANG' && (
+                <button className="btn btn-outline btn-full" onClick={() => {
+                  // Cetak kontrak baru saja (tanpa nota)
+                  printSJB({
+                    noSJB: bbSuccess._noSJB || bbSuccess.noSJB || '',
+                    nama: bbSuccess._nama || '', noKtp: bbSuccess._noKtp || '',
+                    telp1: bbSuccess._telp1 || '',
+                    kategori: bbSuccess._kategori || '', barang: bbSuccess._barang || '',
+                    kelengkapan: bbSuccess._kelengkapan || '', grade: bbSuccess._grade || '',
+                    imeiSn: bbSuccess._imeiSn || '',
+                    hargaJual: bbSuccess._hargaJual || 0,
+                    hargaBuyback: bbSuccess._hargaBuyback || 0,
+                    lamaTitip: bbSuccess._lamaTitip || 30,
+                    tglJual: bbSuccess.tglJualBaru || '',
+                    tglJT: bbSuccess.tglJTBaru || '',
+                    locationGudang: bbSuccess._locationGudang || '',
+                    barcodeA: bbSuccess._barcodeA || '', barcodeB: bbSuccess._barcodeB || '',
+                    kasir: bbSuccess.kasir || '', outlet: bbSuccess.outlet || '',
+                    alamat: bbSuccess.alamat || '', kota: bbSuccess.kota || '',
+                    telpon: bbSuccess.telpon || '',
+                    namaPerusahaan: bbSuccess.namaPerusahaan || 'PT. ACEH GADAI SYARIAH',
+                    waktuOperasional: bbSuccess.waktuOperasional || '',
+                  });
+                }}>📄 Cetak Kontrak Baru</button>
+              )}
+              <button className="btn btn-outline btn-full" onClick={() => setBbSuccess(null)}>Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </AppShell>
+  );
+}
                   hariAktual: bbSuccess._hariAktual || 0,
                   ujrahBerjalan: bbSuccess._totalSistem || 0,
                   totalSistem: bbSuccess._totalSistem || 0,
