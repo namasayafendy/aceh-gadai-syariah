@@ -209,15 +209,14 @@ export default function DashboardPage() {
   ];
 
   // ── Rekap Keluar ─────────────────────────────────────────
-  // Pakai list yang sudah difilter (exclude PERPANJANG hari ini)
-  const gadaiNominal = gadaiFiltered.reduce((s, r) => {
-    const nf = String(r.no_faktur ?? '').trim().toUpperCase();
-    const jml = jumlahLamaMap[nf] !== undefined ? jumlahLamaMap[nf] : Number(r.jumlah_gadai ?? 0);
-    return s + jml;
-  }, 0);
-  const sjbNominal = sjbFiltered.reduce((s, r) => s + Number(r.harga_jual ?? 0), 0);
-  const gadaiCount = gadaiFiltered.length;
-  const sjbCount = sjbFiltered.length;
+  // IKUTI GAS: sum SEMUA gadai/sjb hari ini (RAW, bukan filtered).
+  // Filter hanya dipakai utk list/table supaya row reissue tidak duplikat.
+  // Catatan: tb_gadai/tb_sjb jumlah_gadai/harga_jual sudah updated utk TAMBAH/KURANG,
+  //          dan tgl_gadai reset utk PERPANJANG/TAMBAH/KURANG → ini cocok dgn behavior GAS.
+  const gadaiNominal = gadaiRaw.reduce((s, r) => s + Number(r.jumlah_gadai ?? 0), 0);
+  const sjbNominal   = sjbRaw.reduce((s, r) => s + Number(r.harga_jual ?? 0), 0);
+  const gadaiCount   = gadaiRaw.length;
+  const sjbCount     = sjbRaw.length;
 
   // ── Rekap Masuk ──────────────────────────────────────────
   // Sesuai GAS: tb_buyback bisa berisi BUYBACK / PERPANJANG / SITA

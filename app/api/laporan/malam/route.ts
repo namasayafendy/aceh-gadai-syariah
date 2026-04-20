@@ -144,9 +144,33 @@ export async function GET(request: NextRequest) {
     let tebusMasuk = 0, perpanjangMasuk = 0, buybackMasuk = 0;
     let labaTotal = 0;
 
-    gadaiFiltered.forEach(r => { gadaiKeluar += Number(r.jumlah_gadai ?? 0); });
-    sjbFiltered.forEach(r   => { sjbKeluar   += Number(r.harga_jual    ?? 0); });
+    // IKUTI GAS: Total Keluar = SUM semua gadai/sjb hari ini (RAW, bukan filtered).
+    // Filter hanya dipakai utk gadaiList/sjbList supaya row reissue tidak duplikat.
+    (gadaiRaw ?? []).forEach(r => { gadaiKeluar += Number(r.jumlah_gadai ?? 0); });
+    (sjbRaw   ?? []).forEach(r => { sjbKeluar   += Number(r.harga_jual    ?? 0); });
 
+    // ── Rekap Masuk (mirror dashboard — pisah tebus/buyback/perpanjang) ──
+    // tb_tebus (gadai regular): TEBUS/TAMBAH/KURANG → tebusMasuk, PERPANJANG → perpanjangMasuk
+    // tb_buyback (SJB): BUYBACK → buybackMasuk, PERPANJANG → perpanjangMasuk
+    (tebusRaw ?? []).forEach(r => {
+      const st = String(r.status ?? '').toUpperCase();
+      const jb = Number(r.jumlah_bayar ?? 0);
+      const pb = Number(r.jumlah_gadai_baru ?? 0);
+      if (st === 'TEBUS') tebusMasuk += jb;
+      else if (st === 'PERPANJANG') perpanjangMasuk += jb;
+      else if (st === 'TAMBAH') tebusMasuk += Math.max(0, pb - jb);
+      else if (st === 'KURANG') tebusMasuk += jb + pb;
+      // JUAL/SITA: no cash masuk (JUAL dihitung terpisah di page)
+    });
+    (buybackRaw ?? []).forEach(r => {
+      const st = String(r.status ?? '').toUpperCase();
+      const jb = Number(r.jumlah_bayar ?? 0);
+      if (st === 'BUYBACK') buybackMasuk += jb;
+      else if (st === 'PERPANJANG') perpanjangMasuk += jb;
+      // SITA: no cash masuk; JUAL dihitung terpisah di page
+    });
+
+    // ── Laba (mirror dashboard — status asli dipertahankan) ──
     const allTebus = [
       ...(tebusRaw   ?? []).map(r => ({ ...r, _type: 'TEBUS' })),
       ...(buybackRaw ?? []).map(r => ({
@@ -161,19 +185,17 @@ export async function GET(request: NextRequest) {
     allTebus.forEach(r => {
       const st  = String(r.status ?? '').toUpperCase();
       const jb  = Number(r.jumlah_bayar ?? 0);
-      const uj  = Number(r.ujrah_berjalan ?? 0);
-      const sel = Number(r.selisih ?? 0);
       const pg  = Number(r.jumlah_gadai ?? 0);
       const pb  = Number(r.jumlah_gadai_baru ?? 0);
 
       let laba = 0;
       switch (st) {
         case 'TEBUS':
-        case 'BUYBACK':    laba = jb - pg; tebusMasuk  += jb; break;
-        case 'PERPANJANG': laba = jb;      perpanjangMasuk += jb; break;
-        case 'TAMBAH':     laba = (pb - jb) - pg; tebusMasuk += Math.max(0, pb - jb); break;
-        case 'KURANG':     laba = (jb + pb) - pg; tebusMasuk += jb + pb; break;
-        default:           laba = jb - pg; tebusMasuk += jb;
+        case 'BUYBACK':    laba = jb - pg; break;
+        case 'PERPANJANG': laba = jb;      break;
+        case 'TAMBAH':     laba = (pb - jb) - pg; break;
+        case 'KURANG':     laba = (jb + pb) - pg; break;
+        default:           laba = jb - pg;
       }
       labaTotal += laba;
     });
@@ -217,7 +239,7 @@ export async function GET(request: NextRequest) {
         tebusMasuk:       ceil(tebusMasuk),
         perpanjangMasuk:  ceil(perpanjangMasuk),
         buybackMasuk:     ceil(buybackMasuk),
-        totalMasuk:       ceil(tebusMasuk + perpanjangMasuk),
+        totalMasuk:       ceil(tebusMasuk + buybackMasuk + perpanjangMasuk),
         labaTotal:        ceil(labaTotal),
         kasMasukHari:     ceil(kasMasukHari),
         kasKeluarHari:    ceil(kasKeluarHari),
