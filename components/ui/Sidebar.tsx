@@ -38,6 +38,7 @@ const NAV_ITEMS: NavItem[] = [
   // Admin
   { href: '/edit',      icon: '✏️', label: 'Edit Transaksi',     section: 'Admin',   roles: ['ADMIN','OWNER'] },
   { href: '/outlet',    icon: '⚙️', label: 'Settings Outlet',   section: 'Admin',   roles: ['OWNER'] },
+  { href: '/settings/telegram', icon: '📱', label: 'Setup Telegram', section: 'Admin', roles: ['OWNER'] },
   { href: '/owner',     icon: '👑', label: 'Dashboard Owner',   section: 'Owner',   roles: ['ADMIN','OWNER'] },
   { href: '/backup',    icon: '💾', label: 'Backup & Bon',       section: 'Admin',   roles: ['ADMIN','OWNER'] },
 ];
