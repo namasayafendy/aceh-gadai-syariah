@@ -94,16 +94,38 @@ export default function DashboardPage() {
     jumlahLamaMap[nf] = Number(r.jumlah_gadai ?? 0);
   });
 
+  // Build set of no_faktur yang sudah PERPANJANG hari ini (dari tb_tebus + tb_buyback)
+  // → supaya row ini tidak muncul lagi di "Gadai Baru" (cukup tampil di tabel Perpanjang)
+  const perpanjangNoFakturs = new Set<string>();
+  tebusRaw.forEach(r => {
+    if (String(r.status ?? '').toUpperCase() === 'PERPANJANG') {
+      perpanjangNoFakturs.add(String(r.no_faktur ?? '').trim().toUpperCase());
+    }
+  });
+  buybackRaw.forEach(r => {
+    if (String(r.status ?? '').toUpperCase() === 'PERPANJANG') {
+      perpanjangNoFakturs.add(String(r.no_faktur ?? '').trim().toUpperCase());
+    }
+  });
+
+  // Filter gadai/sjb: exclude yang hari ini cuma PERPANJANG
+  const gadaiFiltered = gadaiRaw.filter(r =>
+    !perpanjangNoFakturs.has(String(r.no_faktur ?? '').trim().toUpperCase())
+  );
+  const sjbFiltered = sjbRaw.filter(r =>
+    !perpanjangNoFakturs.has(String(r.no_faktur ?? '').trim().toUpperCase())
+  );
+
   // Build gadai table list
   const gadaiTableList = [
-    ...gadaiRaw.map(r => {
+    ...gadaiFiltered.map(r => {
       const nf = String(r.no_faktur ?? '').trim().toUpperCase();
       const correctedJumlah = jumlahLamaMap[nf] !== undefined
         ? jumlahLamaMap[nf]
         : Number(r.jumlah_gadai ?? 0);
       return { ...r, jumlah_gadai: correctedJumlah, _isSJB: false, _ket: '' };
     }),
-    ...sjbRaw.map(r => ({
+    ...sjbFiltered.map(r => ({
       ...r,
       jumlah_gadai: Number(r.harga_jual ?? 0),
       _isSJB: true,
@@ -127,23 +149,65 @@ export default function DashboardPage() {
     const st = String(r.status ?? '').toUpperCase();
     return ['TEBUS', 'TAMBAH', 'KURANG'].includes(st);
   });
-  const perpanjangList = tebusRaw.filter(r => String(r.status ?? '').toUpperCase() === 'PERPANJANG');
-  const jualSitaList = tebusRaw.filter(r => {
-    const st = String(r.status ?? '').toUpperCase();
-    return st === 'JUAL' || st === 'SITA';
-  });
+  // Helper: normalisasi row tb_buyback supaya kompatibel dengan TebusTable
+  // tb_buyback kolom beda: harga_jual/harga_jual_baru (bukan jumlah_gadai),
+  //                        total_sistem (bukan total_tebus_sistem),
+  //                        tidak ada tgl_gadai → derive dari tgl - hari_aktual (sesuai GAS fallback)
+  const mapBuybackRow = (r: any) => {
+    let derivedTglGadai: string | null = null;
+    try {
+      const tglBB = r.tgl ? new Date(r.tgl) : null;
+      const ha = Number(r.hari_aktual ?? 0);
+      if (tglBB && !isNaN(tglBB.getTime()) && ha > 0) {
+        const tgd = new Date(tglBB);
+        tgd.setDate(tgd.getDate() - ha);
+        derivedTglGadai = tgd.toISOString();
+      }
+    } catch { /* ignore */ }
+    return {
+      ...r,
+      jumlah_gadai:        Number(r.harga_jual ?? 0),
+      jumlah_gadai_baru:   Number(r.harga_jual_baru ?? 0),
+      total_tebus_sistem:  Number(r.total_sistem ?? 0),
+      tgl_gadai:           derivedTglGadai,
+    };
+  };
+
+  // Perpanjang: gabung dari tb_tebus (gadai regular) + tb_buyback (SJB) — sesuai GAS allTebusLike
+  const perpanjangList = [
+    ...tebusRaw.filter(r => String(r.status ?? '').toUpperCase() === 'PERPANJANG'),
+    ...buybackRaw
+      .filter(r => String(r.status ?? '').toUpperCase() === 'PERPANJANG')
+      .map(mapBuybackRow),
+  ];
+  // Jual / Sita: dari tb_tebus (gadai) + tb_buyback (SJB sita)
+  const jualSitaList = [
+    ...tebusRaw.filter(r => {
+      const st = String(r.status ?? '').toUpperCase();
+      return st === 'JUAL' || st === 'SITA';
+    }),
+    ...buybackRaw
+      .filter(r => {
+        const st = String(r.status ?? '').toUpperCase();
+        return st === 'JUAL' || st === 'SITA';
+      })
+      .map(mapBuybackRow),
+  ];
 
   // ── Rekap Keluar ─────────────────────────────────────────
-  const gadaiNominal = gadaiRaw.reduce((s, r) => {
+  // Pakai list yang sudah difilter (exclude PERPANJANG hari ini)
+  const gadaiNominal = gadaiFiltered.reduce((s, r) => {
     const nf = String(r.no_faktur ?? '').trim().toUpperCase();
     const jml = jumlahLamaMap[nf] !== undefined ? jumlahLamaMap[nf] : Number(r.jumlah_gadai ?? 0);
     return s + jml;
   }, 0);
-  const sjbNominal = sjbRaw.reduce((s, r) => s + Number(r.harga_jual ?? 0), 0);
-  const gadaiCount = gadaiRaw.length;
-  const sjbCount = sjbRaw.length;
+  const sjbNominal = sjbFiltered.reduce((s, r) => s + Number(r.harga_jual ?? 0), 0);
+  const gadaiCount = gadaiFiltered.length;
+  const sjbCount = sjbFiltered.length;
 
   // ── Rekap Masuk ──────────────────────────────────────────
+  // Sesuai GAS: status row di tb_buyback bisa BUYBACK / PERPANJANG / SITA / TAMBAH / KURANG
+  // → harus dipisah berdasarkan status, bukan dijumlah semua ke "Buyback"
   let tebusNom = 0, perpanjangNom = 0, buybackNom = 0;
   tebusRaw.forEach(r => {
     const st = String(r.status ?? '').toUpperCase();
@@ -153,12 +217,25 @@ export default function DashboardPage() {
     else if (st === 'TAMBAH') tebusNom += Math.max(0, Number(r.jumlah_gadai_baru ?? 0) - jb);
     else if (st === 'KURANG') tebusNom += jb + Number(r.jumlah_gadai_baru ?? 0);
   });
-  buybackRaw.forEach(r => { buybackNom += Number(r.jumlah_bayar ?? 0); });
+  buybackRaw.forEach(r => {
+    const st = String(r.status ?? '').toUpperCase();
+    const jb = Number(r.jumlah_bayar ?? 0);
+    if (st === 'BUYBACK') buybackNom += jb;
+    else if (st === 'PERPANJANG') perpanjangNom += jb;
+    else if (st === 'TAMBAH') tebusNom += Math.max(0, Number(r.harga_jual_baru ?? 0) - jb);
+    else if (st === 'KURANG') tebusNom += jb + Number(r.harga_jual_baru ?? 0);
+    // SITA → no cash (0); JUAL → jualMasuk counted separately below
+  });
   const tebusCount = tebusRaw.filter(r => {
     const st = String(r.status ?? '').toUpperCase();
     return ['TEBUS', 'TAMBAH', 'KURANG'].includes(st);
+  }).length + buybackRaw.filter(r => {
+    const st = String(r.status ?? '').toUpperCase();
+    return ['TAMBAH', 'KURANG'].includes(st);
   }).length;
-  const buybackCount = buybackRaw.length;
+  const buybackCount = buybackRaw.filter(r =>
+    String(r.status ?? '').toUpperCase() === 'BUYBACK'
+  ).length;
 
   // Jual masuk from jualSitaList
   let jualMasuk = 0, jualCount = 0, sitaCount = 0;
@@ -171,12 +248,14 @@ export default function DashboardPage() {
   const totalMasuk = tebusNom + buybackNom + perpanjangNom + jualMasuk;
 
   // ── Rekap Laba ───────────────────────────────────────────
+  // Sesuai GAS: allTebusLike = tebusList + buybackList — status asli dipertahankan
+  // (tb_buyback bisa berisi BUYBACK / PERPANJANG / SITA / TAMBAH / KURANG)
   let labaTebus = 0, labaBB = 0, labaPjg = 0, labaJual = 0, labaSita = 0, labaTK = 0;
   const allTebusForLaba = [
     ...tebusRaw.map(r => ({ ...r })),
     ...buybackRaw.map(r => ({
       ...r,
-      status: 'BUYBACK',
+      // Preserve r.status — JANGAN force-cast ke BUYBACK
       jumlah_gadai: r.harga_jual ?? 0,
       jumlah_gadai_baru: r.harga_jual_baru ?? 0,
     })),
