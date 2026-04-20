@@ -10,20 +10,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 
-async function requireOwner(request: NextRequest): Promise<
-  { ok: true; db: Awaited<ReturnType<typeof createServiceClient>>; ownerName: string }
-  | { ok: false; status: number; msg: string }
-> {
+async function checkOwner() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false as const, status: 401, msg: 'Sesi tidak valid.' };
+  if (!user) return { err: NextResponse.json({ ok: false, msg: 'Sesi tidak valid.' }, { status: 401 }) };
   const { data: profile } = await supabase
     .from('profiles').select('role, nama, status').eq('id', user.id).single();
   const p = profile as { role: string; nama: string; status: string } | null;
-  if (!p || p.status !== 'AKTIF') return { ok: false as const, status: 403, msg: 'Akun tidak aktif.' };
-  if (p.role !== 'OWNER') return { ok: false as const, status: 403, msg: 'Akses ditolak. Hanya Owner.' };
+  if (!p || p.status !== 'AKTIF') {
+    return { err: NextResponse.json({ ok: false, msg: 'Akun tidak aktif.' }, { status: 403 }) };
+  }
+  if (p.role !== 'OWNER') {
+    return { err: NextResponse.json({ ok: false, msg: 'Akses ditolak. Hanya Owner.' }, { status: 403 }) };
+  }
   const db = await createServiceClient();
-  return { ok: true as const, db, ownerName: p.nama };
+  return { err: null, db, ownerName: p.nama };
 }
 
 function randomCode(): string {
@@ -34,19 +35,20 @@ function randomCode(): string {
   return `AGS-TG-${out}`;
 }
 
-export async function GET(request: NextRequest) {
-  const auth = await requireOwner(request);
-  if (!auth.ok) return NextResponse.json({ ok: false, msg: auth.msg }, { status: auth.status });
+export async function GET(_request: NextRequest) {
+  const auth = await checkOwner();
+  if (auth.err) return auth.err;
 
-  const { data: outlets } = await auth.db.from('outlets')
+  const { data: outlets } = await auth.db!.from('outlets')
     .select('id, nama, telegram_chat_id, telegram_group_title, telegram_registered_at')
     .order('id');
   return NextResponse.json({ ok: true, outlets: outlets ?? [] });
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireOwner(request);
-  if (!auth.ok) return NextResponse.json({ ok: false, msg: auth.msg }, { status: auth.status });
+  const auth = await checkOwner();
+  if (auth.err) return auth.err;
+  const db = auth.db!;
 
   const body = await request.json().catch(() => ({}));
   const pin = String(body.pin ?? '').trim();
@@ -54,22 +56,22 @@ export async function POST(request: NextRequest) {
   if (!pin) return NextResponse.json({ ok: false, msg: 'PIN wajib.' });
   if (!outletId) return NextResponse.json({ ok: false, msg: 'Outlet wajib.' });
 
-  const { data: pinRes } = await auth.db.rpc('validate_pin', { p_pin: pin, p_outlet_id: 0 });
+  const { data: pinRes } = await db.rpc('validate_pin', { p_pin: pin, p_outlet_id: 0 });
   if (!pinRes?.ok) return NextResponse.json({ ok: false, msg: pinRes?.msg ?? 'PIN salah.' });
   if (pinRes.role !== 'OWNER') return NextResponse.json({ ok: false, msg: 'PIN bukan milik Owner.' });
 
   // Cek outlet exists
-  const { data: outlet } = await auth.db.from('outlets').select('id, nama').eq('id', outletId).single();
+  const { data: outlet } = await db.from('outlets').select('id, nama').eq('id', outletId).single();
   if (!outlet) return NextResponse.json({ ok: false, msg: 'Outlet tidak ditemukan.' });
 
   // Invalidate kode lama yang masih aktif untuk outlet ini
-  await auth.db.from('telegram_register_codes').update({ used_at: new Date().toISOString(), used_by_user: 'EXPIRED' })
+  await db.from('telegram_register_codes').update({ used_at: new Date().toISOString(), used_by_user: 'EXPIRED' })
     .eq('outlet_id', outletId).is('used_at', null);
 
   const kode = randomCode();
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 menit
 
-  const { error } = await auth.db.from('telegram_register_codes').insert({
+  const { error } = await db.from('telegram_register_codes').insert({
     kode, outlet_id: outletId, expires_at: expiresAt, created_by: pinRes.nama ?? auth.ownerName,
   });
   if (error) return NextResponse.json({ ok: false, msg: error.message });
@@ -89,19 +91,20 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const auth = await requireOwner(request);
-  if (!auth.ok) return NextResponse.json({ ok: false, msg: auth.msg }, { status: auth.status });
+  const auth = await checkOwner();
+  if (auth.err) return auth.err;
+  const db = auth.db!;
 
   const outletId = Number(request.nextUrl.searchParams.get('outletId') ?? 0);
   const pin = request.nextUrl.searchParams.get('pin') ?? '';
   if (!outletId) return NextResponse.json({ ok: false, msg: 'Outlet wajib.' });
   if (!pin) return NextResponse.json({ ok: false, msg: 'PIN wajib.' });
 
-  const { data: pinRes } = await auth.db.rpc('validate_pin', { p_pin: pin, p_outlet_id: 0 });
+  const { data: pinRes } = await db.rpc('validate_pin', { p_pin: pin, p_outlet_id: 0 });
   if (!pinRes?.ok) return NextResponse.json({ ok: false, msg: pinRes?.msg ?? 'PIN salah.' });
   if (pinRes.role !== 'OWNER') return NextResponse.json({ ok: false, msg: 'PIN bukan milik Owner.' });
 
-  const { error } = await auth.db.from('outlets').update({
+  const { error } = await db.from('outlets').update({
     telegram_chat_id: null, telegram_registered_at: null, telegram_group_title: null,
   }).eq('id', outletId);
   if (error) return NextResponse.json({ ok: false, msg: error.message });
