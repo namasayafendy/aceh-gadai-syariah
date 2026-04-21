@@ -5,19 +5,22 @@
 // File: components/ui/DiskonApprovalModal.tsx
 //
 // Modal yang muncul saat kasir submit tebus/buyback dengan diskon
-// ≥ Rp 10.000. Kasir harus menunggu Owner approve/reject via Telegram.
+// >= Rp 10.000. Kasir harus menunggu Owner approve/reject via Telegram.
 //
-// - Subscribe ke Supabase realtime untuk row tb_diskon yang lagi
-//   di-proses.
-// - Polling fallback tiap 5 detik kalau realtime belum aktif.
+// - Polling via /api/diskon/status tiap 3 detik (server-side, bypass RLS).
+// - Supabase realtime sebagai bonus (kalau RLS membolehkan, lebih cepat).
 // - Bunyi "ting" saat status berubah APPROVED.
 // - 3 tombol tergantung state:
-//   • PENDING   → "Batal Tunggu" (cancel, tidak rollback row DB)
-//   • APPROVED  → "Lanjutkan Submit" (parent akan finalize transaksi)
-//   • REJECTED  → "Tutup" / "Ajukan Ulang" (parent reset form tapi set id_parent)
+//   - PENDING   -> "Batal Tunggu" (cancel, tidak rollback row DB)
+//   - APPROVED  -> "Lanjutkan Submit" (parent akan finalize transaksi)
+//   - REJECTED  -> "Tutup" / "Ajukan Ulang" (parent reset form tapi set id_parent)
+//
+// IMPORTANT: Pakai inline styles (CSS vars dari globals.css) — project
+// tidak punya Tailwind aktif. Kelas Tailwind "fixed inset-0..." tidak
+// akan dikompilasi sehingga modal tidak muncul sebagai overlay.
 // ============================================================
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, CSSProperties } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
 export type DiskonStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -122,99 +125,113 @@ export default function DiskonApprovalModal({
   const mm = Math.floor(elapsed / 60).toString().padStart(2, '0');
   const ss = (elapsed % 60).toString().padStart(2, '0');
 
+  // ── Inline styles (no Tailwind in project) ─────────────────
+  const overlay: CSSProperties = {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)',
+    zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    backdropFilter: 'blur(4px)', padding: 16,
+  };
+  const modal: CSSProperties = {
+    background: 'var(--surface)', border: '1px solid var(--border)',
+    borderRadius: 16, width: 440, maxWidth: '100%',
+    boxShadow: '0 25px 50px rgba(0,0,0,.5)', overflow: 'hidden',
+  };
+  const headerBase: CSSProperties = {
+    padding: '24px 20px', textAlign: 'center', color: '#fff',
+  };
+  const body: CSSProperties = { padding: 20, display: 'flex', flexDirection: 'column', gap: 14 };
+  const bigEmoji: CSSProperties = { fontSize: 48, lineHeight: 1, marginBottom: 8 };
+  const title: CSSProperties = { fontSize: 18, fontWeight: 700, letterSpacing: '.2px' };
+  const sub: CSSProperties = { fontSize: 12, opacity: .9, marginTop: 4, fontFamily: 'var(--mono)' };
+  const text: CSSProperties = { color: 'var(--text)', fontSize: 13, textAlign: 'center', lineHeight: 1.5 };
+  const btnBase: CSSProperties = {
+    padding: '12px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
+    fontSize: 14, fontWeight: 600, width: '100%', transition: '.15s',
+  };
+  const btnPrimary: CSSProperties = {
+    ...btnBase, background: 'var(--green)', color: '#fff', fontSize: 15, padding: '14px 16px',
+  };
+  const btnSecondary: CSSProperties = {
+    ...btnBase, background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--text2)',
+  };
+  const btnBlue: CSSProperties = {
+    ...btnBase, background: 'var(--accent)', color: '#fff',
+  };
+  const timer: CSSProperties = {
+    textAlign: 'center', fontSize: 30, fontFamily: 'var(--mono)',
+    color: 'var(--text)', letterSpacing: 2,
+  };
+  const rejectBox: CSSProperties = {
+    background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.3)',
+    borderRadius: 8, padding: 12,
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden">
+    <div style={overlay} onClick={(e) => e.stopPropagation()}>
+      <div style={modal} onClick={(e) => e.stopPropagation()}>
         {status === 'PENDING' && (
           <>
-            <div className="bg-gradient-to-br from-amber-400 to-orange-500 p-6 text-center text-white">
-              <div className="text-6xl mb-2 animate-pulse">⏳</div>
-              <h3 className="text-xl font-bold">Menunggu Approval Owner</h3>
-              <p className="text-sm opacity-90 mt-1">
-                ID: <span className="font-mono">{idDiskon}</span>
-              </p>
+            <div style={{ ...headerBase, background: 'linear-gradient(135deg, #f59e0b, #ea580c)' }}>
+              <div style={bigEmoji}>⏳</div>
+              <div style={title}>Menunggu Approval Owner</div>
+              <div style={sub}>ID: {idDiskon}</div>
             </div>
-            <div className="p-6 space-y-4">
-              <p className="text-gray-700 text-center">
+            <div style={body}>
+              <div style={text}>
                 Notifikasi sudah dikirim ke grup Telegram.<br />
                 Mohon tunggu Owner menekan APPROVE / REJECT.
-              </p>
-              <div className="text-center text-3xl font-mono text-gray-800 tracking-wider">
-                {mm}:{ss}
               </div>
-              <button
-                onClick={onCancel}
-                className="w-full py-2 px-4 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 font-medium"
-              >
-                Batal Tunggu
-              </button>
-              <p className="text-[11px] text-gray-400 text-center">
+              <div style={timer}>{mm}:{ss}</div>
+              <button style={btnSecondary} onClick={onCancel}>Batal Tunggu</button>
+              <div style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'center' }}>
                 Membatalkan tunggu TIDAK menghapus request — Owner masih bisa approve/reject nanti.
-              </p>
+              </div>
             </div>
           </>
         )}
 
         {status === 'APPROVED' && (
           <>
-            <div className="bg-gradient-to-br from-emerald-400 to-green-600 p-6 text-center text-white">
-              <div className="text-6xl mb-2">✅</div>
-              <h3 className="text-xl font-bold">DISKON DI-APPROVE</h3>
-              <p className="text-sm opacity-90 mt-1">
-                ID: <span className="font-mono">{idDiskon}</span>
-              </p>
+            <div style={{ ...headerBase, background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+              <div style={bigEmoji}>✅</div>
+              <div style={title}>DISKON DI-APPROVE</div>
+              <div style={sub}>ID: {idDiskon}</div>
             </div>
-            <div className="p-6 space-y-4">
-              <p className="text-gray-700 text-center">
+            <div style={body}>
+              <div style={text}>
                 Owner telah menyetujui. Silakan lanjutkan submit transaksi.
-              </p>
-              <button
-                onClick={onApproved}
-                className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-white font-semibold text-lg"
-              >
-                LANJUTKAN SUBMIT
-              </button>
-              <button
-                onClick={onCancel}
-                className="w-full py-2 px-4 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600 text-sm"
-              >
-                Batal
-              </button>
+              </div>
+              <button style={btnPrimary} onClick={onApproved}>LANJUTKAN SUBMIT</button>
+              <button style={btnSecondary} onClick={onCancel}>Batal</button>
             </div>
           </>
         )}
 
         {status === 'REJECTED' && (
           <>
-            <div className="bg-gradient-to-br from-rose-500 to-red-600 p-6 text-center text-white">
-              <div className="text-6xl mb-2">❌</div>
-              <h3 className="text-xl font-bold">DISKON DI-REJECT</h3>
-              <p className="text-sm opacity-90 mt-1">
-                ID: <span className="font-mono">{idDiskon}</span>
-              </p>
+            <div style={{ ...headerBase, background: 'linear-gradient(135deg, #f43f5e, #dc2626)' }}>
+              <div style={bigEmoji}>❌</div>
+              <div style={title}>DISKON DI-REJECT</div>
+              <div style={sub}>ID: {idDiskon}</div>
             </div>
-            <div className="p-6 space-y-4">
+            <div style={body}>
               {alasanReject ? (
-                <div className="bg-rose-50 border border-rose-200 rounded-lg p-3">
-                  <div className="text-xs text-rose-600 font-medium mb-1">Alasan dari Owner:</div>
-                  <div className="text-gray-800 text-sm whitespace-pre-wrap">{alasanReject}</div>
+                <div style={rejectBox}>
+                  <div style={{ fontSize: 11, color: 'var(--red)', fontWeight: 600, marginBottom: 4 }}>
+                    Alasan dari Owner:
+                  </div>
+                  <div style={{ color: 'var(--text)', fontSize: 13, whiteSpace: 'pre-wrap' }}>
+                    {alasanReject}
+                  </div>
                 </div>
               ) : (
-                <p className="text-center text-gray-500 text-sm italic">
+                <div style={{ ...text, color: 'var(--text3)', fontStyle: 'italic' }}>
                   Menunggu alasan dari Owner...
-                </p>
+                </div>
               )}
-              <div className="flex gap-2">
-                <button
-                  onClick={onCancel}
-                  className="flex-1 py-2 px-4 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 font-medium"
-                >
-                  Tutup
-                </button>
-                <button
-                  onClick={() => onRejected(alasanReject)}
-                  className="flex-1 py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium"
-                >
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button style={{ ...btnSecondary, flex: 1 }} onClick={onCancel}>Tutup</button>
+                <button style={{ ...btnBlue, flex: 1 }} onClick={() => onRejected(alasanReject)}>
                   Ajukan Ulang
                 </button>
               </div>
