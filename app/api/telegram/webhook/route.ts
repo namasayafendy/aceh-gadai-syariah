@@ -186,11 +186,23 @@ async function handlePhotoBukti(db: any, msg: any) {
   const ym = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }).substring(0, 7);
   const stamp = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' })
     .replace(/[: ]/g, '').replace(/-/g, '').substring(0, 13);
-  const ext = (dl.contentType.includes('png') ? 'png' : 'jpg');
+  // Derive MIME dari filePath Telegram (reliable) — bukan dari header content-type
+  // (Telegram file server kadang return application/octet-stream yg ditolak Supabase storage).
+  // msg.photo dari Telegram selalu image (JPEG default); fallback jpg.
+  const tgPath = String(dl.filePath ?? '').toLowerCase();
+  const ext = tgPath.endsWith('.png')  ? 'png'
+            : tgPath.endsWith('.webp') ? 'webp'
+            : 'jpg';
+  const mimeByExt: Record<string, string> = {
+    png:  'image/png',
+    webp: 'image/webp',
+    jpg:  'image/jpeg',
+  };
+  const safeContentType = mimeByExt[ext];
   const path = `${outletName}/bukti-transfer/${ym}/TRF-${req.id}_${stamp}.${ext}`;
 
   const { error: upErr } = await db.storage.from('backups')
-    .upload(path, Buffer.from(dl.buffer), { contentType: dl.contentType, upsert: true });
+    .upload(path, Buffer.from(dl.buffer), { contentType: safeContentType, upsert: true });
   if (upErr) {
     return sendTelegram(chatId,
       escapeMd(`❌ Gagal simpan bukti: ${upErr.message}`),
