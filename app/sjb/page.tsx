@@ -135,7 +135,8 @@ export default function SJBPage() {
             headers: { 'Content-Type': 'application/json', 'x-outlet-id': String(outletId) },
             body: JSON.stringify({
               pin, tipe: 'SJB',
-              refTable: 'tb_sjb', refNoFaktur: json.noFaktur, refId: null,
+              // SJB submit response return `noSJB` (bukan `noFaktur`) — fallback utk safety
+              refTable: 'tb_sjb', refNoFaktur: json.noSJB ?? json.noFaktur, refId: json.idSJB ?? null,
               nominal: bankVal,
               namaPenerima: akadTrfNama.trim(), noRek: akadTrfNoRek.trim(), bank: akadTrfBank.trim(),
               namaNasabah: nama.trim(), barang: barang.trim(),
