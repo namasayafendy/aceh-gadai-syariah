@@ -46,29 +46,31 @@ export default function DiskonApprovalModal({
     return () => clearInterval(t);
   }, []);
 
-  // Realtime subscription + polling fallback
+  // Polling via API (service client, bypass RLS) + realtime bonus
   useEffect(() => {
     if (!idDiskon) return;
     const sb = createClient();
     let mounted = true;
 
     async function fetchState() {
-      const { data } = await sb
-        .from('tb_diskon' as any)
-        .select('status, alasan_reject')
-        .eq('id_diskon', idDiskon)
-        .maybeSingle();
-      if (!mounted || !data) return;
-      const row = data as any;
-      if (row.status && (row.status === 'PENDING' || row.status === 'APPROVED' || row.status === 'REJECTED')) {
-        setStatus(row.status);
-        if (row.status === 'APPROVED' && !pingedRef.current) {
-          playTing(); pingedRef.current = true;
+      try {
+        const res = await fetch(`/api/diskon/status?id=${encodeURIComponent(idDiskon)}`, {
+          cache: 'no-store',
+        });
+        const json = await res.json();
+        if (!mounted || !json?.ok) return;
+        const st = json.status as string;
+        if (st === 'PENDING' || st === 'APPROVED' || st === 'REJECTED') {
+          setStatus(st);
+          if (st === 'APPROVED' && !pingedRef.current) {
+            playTing(); pingedRef.current = true;
+          }
         }
-      }
-      if (row.alasan_reject) setAlasanReject(String(row.alasan_reject));
+        if (json.alasanReject) setAlasanReject(String(json.alasanReject));
+      } catch { /* silent */ }
     }
 
+    // Realtime (bonus — kalau RLS membolehkan, lebih cepat dari polling)
     const channel = sb
       .channel(`diskon-${idDiskon}`)
       .on('postgres_changes' as any, {
@@ -89,9 +91,9 @@ export default function DiskonApprovalModal({
       })
       .subscribe();
 
-    // Initial fetch + polling fallback tiap 5 detik
+    // Initial fetch + polling tiap 3 detik (utama)
     fetchState();
-    const poll = setInterval(fetchState, 5000);
+    const poll = setInterval(fetchState, 3000);
 
     return () => {
       mounted = false;
