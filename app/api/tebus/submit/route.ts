@@ -37,7 +37,15 @@ interface SubmitTebusBody {
   taksiranJual?:     number;
   taksiranSita?:     number;
   tanpaSurat?:       boolean;
+  // Fase 3: kalau diskon ≥ Rp 10.000, frontend wajib request approval dulu
+  // via /api/diskon/request, lalu kirim id_diskon yg sudah APPROVED ke sini.
+  idDiskonApproved?: string;
 }
+
+// Threshold diskon yang butuh approval Telegram (selaras Fase 3).
+// Nilai ini SENGAJA disamakan dengan /api/diskon/request supaya validasi
+// server-side konsisten: client tidak bisa bypass approval.
+const DISKON_APPROVAL_THRESHOLD = 10000;
 
 export async function POST(request: NextRequest) {
   try {
@@ -78,9 +86,52 @@ export async function POST(request: NextRequest) {
     const now = new Date();
 
     // ── 5. Simpan diskon jika ada (selisih > Rp 9.000) ───────
+    // - Selisih 9.001 – 9.999 : old path, insert langsung (tidak butuh approval).
+    // - Selisih ≥ 10.000      : Fase 3 path, WAJIB idDiskonApproved yg sudah
+    //                           di-approve Owner via Telegram. Row tb_diskon
+    //                           sudah ada (status=APPROVED) → cukup finalize.
     let idDiskon = '';
     const adaDiskon = statusPerluDiskon && selisih > 9000;
-    if (adaDiskon) {
+    const needApproval = statusPerluDiskon && selisih >= DISKON_APPROVAL_THRESHOLD;
+
+    if (needApproval) {
+      // Fase 3: wajib idDiskonApproved dari /api/diskon/request
+      if (!body.idDiskonApproved) {
+        return NextResponse.json({
+          ok: false,
+          msg: `Diskon Rp ${selisih.toLocaleString('id-ID')} ≥ Rp 10.000 wajib approval Owner via Telegram. Submit request diskon dulu.`,
+        });
+      }
+      // Validasi row tb_diskon: harus APPROVED, outlet cocok, belum difinalize
+      const { data: dskRow } = await db.from('tb_diskon')
+        .select('id_diskon, status, outlet_id, finalized_at, besaran_potongan, total_setelah_diskon')
+        .eq('id_diskon', body.idDiskonApproved)
+        .maybeSingle();
+
+      if (!dskRow) {
+        return NextResponse.json({ ok: false, msg: `Diskon ${body.idDiskonApproved} tidak ditemukan.` });
+      }
+      const dsk = dskRow as any;
+      if (dsk.status !== 'APPROVED') {
+        return NextResponse.json({ ok: false, msg: `Diskon belum APPROVED (status: ${dsk.status}).` });
+      }
+      if (Number(dsk.outlet_id ?? 0) !== outletId) {
+        return NextResponse.json({ ok: false, msg: 'Outlet diskon tidak cocok dengan outlet sekarang.' });
+      }
+      if (dsk.finalized_at) {
+        return NextResponse.json({ ok: false, msg: 'Diskon ini sudah pernah di-finalize sebelumnya.' });
+      }
+      // Safety: pastikan nominal tidak dimanipulasi client-side
+      if (Math.abs(Number(dsk.besaran_potongan ?? 0) - selisih) > 1) {
+        return NextResponse.json({
+          ok: false,
+          msg: `Nominal diskon tidak cocok dengan yang di-approve (approved: Rp ${Number(dsk.besaran_potongan).toLocaleString('id-ID')}, submit: Rp ${selisih.toLocaleString('id-ID')}).`,
+        });
+      }
+      idDiskon = body.idDiskonApproved;
+      // Update row dilakukan di section finalize setelah tb_tebus berhasil insert.
+    } else if (adaDiskon) {
+      // Old path (selisih 9.001 – 9.999): insert langsung tanpa approval.
       idDiskon = await safeGetNextId(db, 'DISKON', outletId);
 
       await db.from('tb_diskon').insert({
@@ -98,6 +149,7 @@ export async function POST(request: NextRequest) {
         status_tebus:         body.status,
         kasir,
         outlet: outletName,
+        // status default 'DONE' via migration 010 — legacy-friendly.
       });
     }
 
@@ -141,6 +193,18 @@ export async function POST(request: NextRequest) {
     const { error: tebErr } = await db.from('tb_tebus').insert(tebusRow);
     if (tebErr) {
       return NextResponse.json({ ok: false, msg: 'Gagal simpan tebus: ' + tebErr.message });
+    }
+
+    // ── 7b. Finalize diskon Fase 3 (kalau path needApproval) ─
+    // Row tb_diskon sudah ada (APPROVED). Kita update: id_tebus, status=DONE,
+    // finalized_at, sinkron kolom legacy `approved='Y'`.
+    if (needApproval && idDiskon) {
+      await db.from('tb_diskon').update({
+        id_tebus:     idTebus,
+        status:       'DONE',
+        finalized_at: new Date().toISOString(),
+        approved:     'Y',
+      }).eq('id_diskon', idDiskon);
     }
 
     // ── 8. Update status tb_gadai ─────────────────────────────

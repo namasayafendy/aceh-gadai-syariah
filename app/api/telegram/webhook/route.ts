@@ -124,6 +124,15 @@ async function handleMessage(db: any, msg: any) {
     return handlePhotoBukti(db, msg);
   }
 
+  // ── Text reply → bisa jadi alasan REJECT untuk diskon ──
+  // Fase 3: kalau Owner reply ke pesan request diskon yg sudah
+  // di-REJECT tapi alasan_reject-nya belum ada, text-nya dipakai
+  // sebagai alasan. (Approve tidak perlu alasan.)
+  if (msg.text && msg.reply_to_message) {
+    await handleDiskonRejectReason(db, msg);
+    return;
+  }
+
   // Pesan lain di grup di-ignore
 }
 
@@ -346,6 +355,14 @@ async function handleCallback(db: any, cb: any) {
     return handleTransferDecision(db, cb, idNum, action, fromUsername, fromUserId);
   }
 
+  // ── Diskon approve/reject (Fase 3) ──
+  // Catatan: id_diskon adalah TEXT (ex: DSK-1-20260421-001), bukan integer.
+  // Jadi kita pakai parts[2] apa adanya (bukan idNum).
+  const idDiskon = parts[2] ?? '';
+  if (kind === 'DSK' && idDiskon && (action === 'approve' || action === 'reject')) {
+    return handleDiskonDecision(db, cb, idDiskon, action, fromUsername, fromUserId);
+  }
+
   return answerCallback(cb.id, 'Fitur belum tersedia', false);
 }
 
@@ -439,6 +456,141 @@ async function handleTransferDecision(
   }
 
   return answerCallback(cb.id, '❌ Transfer di-reject.', false);
+}
+
+// ── Fase 3: Diskon approve/reject via Telegram ──
+async function handleDiskonDecision(
+  db: any, cb: any, idDiskon: string,
+  action: 'approve' | 'reject',
+  fromUsername: string | null,
+  fromUserId: number | null,
+) {
+  const chatId = cb.message?.chat?.id;
+  const messageId = cb.message?.message_id;
+
+  const { data: dRow } = await db.from('tb_diskon')
+    .select('*').eq('id_diskon', idDiskon).maybeSingle();
+  if (!dRow) {
+    return answerCallback(cb.id, `❌ Diskon ${idDiskon} tidak ditemukan.`, true);
+  }
+  const d = dRow as any;
+
+  if (d.status !== 'PENDING') {
+    return answerCallback(cb.id,
+      `ℹ️ Diskon sudah diproses (${d.status}).`, true);
+  }
+
+  const nowIso = new Date().toISOString();
+  const approverTag = fromUsername ? `@${fromUsername}` : `(user ${fromUserId})`;
+  const selisih = Number(d.besaran_potongan ?? 0);
+
+  if (action === 'approve') {
+    await db.from('tb_diskon').update({
+      status: 'APPROVED',
+      approver_username: fromUsername,
+      approver_user_id: fromUserId,
+      approved_at: nowIso,
+    }).eq('id_diskon', idDiskon);
+
+    if (fromUserId) {
+      await db.from('telegram_approvers').update({ last_action_at: nowIso })
+        .eq('telegram_user_id', fromUserId).then(() => {}, () => {});
+    }
+
+    const body =
+      `*✅ DISKON DI\\-APPROVE*\n\n` +
+      `*${escapeMd(idDiskon)}* \\| ${escapeMd(d.status_tebus ?? '-')} ${escapeMd(d.no_faktur ?? '')}\n` +
+      `Nasabah: ${escapeMd(d.nama_nasabah ?? '-')}\n` +
+      `Diskon: Rp ${formatRpMd(selisih)}\n\n` +
+      `_Disetujui oleh:_ ${escapeMd(approverTag)}\n` +
+      `_Waktu:_ ${escapeMd(new Date().toLocaleString('id-ID'))}\n\n` +
+      `ℹ️ _Kasir akan melanjutkan submit transaksi\\._`;
+
+    try {
+      if (chatId && messageId) {
+        await editMessage(chatId, messageId, body, { parseMode: 'MarkdownV2' });
+        await editMessageKeyboard(chatId, messageId, { inline_keyboard: [] });
+      }
+    } catch (e) {
+      console.error('[telegram] editMessage DISKON APPROVED failed:', e);
+    }
+
+    return answerCallback(cb.id, '✅ Diskon di-approve. Kasir lanjutkan submit.', false);
+  }
+
+  // REJECT
+  await db.from('tb_diskon').update({
+    status: 'REJECTED',
+    rejected_by_username: fromUsername,
+    rejected_by_user_id: fromUserId,
+    rejected_at: nowIso,
+  }).eq('id_diskon', idDiskon);
+
+  if (fromUserId) {
+    await db.from('telegram_approvers').update({ last_action_at: nowIso })
+      .eq('telegram_user_id', fromUserId).then(() => {}, () => {});
+  }
+
+  const body =
+    `*❌ DISKON DI\\-REJECT*\n\n` +
+    `*${escapeMd(idDiskon)}* \\| ${escapeMd(d.status_tebus ?? '-')} ${escapeMd(d.no_faktur ?? '')}\n` +
+    `Nasabah: ${escapeMd(d.nama_nasabah ?? '-')}\n` +
+    `Diskon diajukan: Rp ${formatRpMd(selisih)}\n\n` +
+    `_Ditolak oleh:_ ${escapeMd(approverTag)}\n` +
+    `_Waktu:_ ${escapeMd(new Date().toLocaleString('id-ID'))}\n\n` +
+    `📝 *REPLY pesan ini dengan alasan reject\\.*`;
+
+  try {
+    if (chatId && messageId) {
+      await editMessage(chatId, messageId, body, { parseMode: 'MarkdownV2' });
+      await editMessageKeyboard(chatId, messageId, { inline_keyboard: [] });
+    }
+  } catch (e) {
+    console.error('[telegram] editMessage DISKON REJECTED failed:', e);
+  }
+
+  return answerCallback(cb.id, '❌ Diskon di-reject. Reply alasan di grup.', false);
+}
+
+// ── Fase 3: alasan reject via text reply ke pesan request diskon ──
+async function handleDiskonRejectReason(db: any, msg: any) {
+  const replyTo = msg.reply_to_message;
+  if (!replyTo?.message_id) return;
+
+  const chatId = msg.chat?.id;
+  const replyMsgId = replyTo.message_id;
+
+  const { data: dRow } = await db.from('tb_diskon')
+    .select('*')
+    .eq('telegram_chat_id', chatId)
+    .eq('telegram_message_id', replyMsgId)
+    .maybeSingle();
+  if (!dRow) return;
+
+  const d = dRow as any;
+  if (d.status !== 'REJECTED') return;
+  if (d.alasan_reject) return;
+
+  const alasan = String(msg.text ?? '').trim();
+  if (alasan.length < 2) return;
+
+  await db.from('tb_diskon').update({
+    alasan_reject: alasan,
+  }).eq('id_diskon', d.id_diskon);
+
+  try {
+    const body =
+      `*❌ DISKON DI\\-REJECT*\n\n` +
+      `*${escapeMd(d.id_diskon)}* \\| ${escapeMd(d.status_tebus ?? '-')} ${escapeMd(d.no_faktur ?? '')}\n` +
+      `Nasabah: ${escapeMd(d.nama_nasabah ?? '-')}\n` +
+      `Diskon diajukan: Rp ${formatRpMd(Number(d.besaran_potongan ?? 0))}\n\n` +
+      `_Alasan:_ ${escapeMd(alasan)}\n` +
+      `_Ditolak oleh:_ ${escapeMd(d.rejected_by_username ? '@' + d.rejected_by_username : '(owner)')}\n` +
+      `_Waktu:_ ${escapeMd(new Date(d.rejected_at ?? Date.now()).toLocaleString('id-ID'))}`;
+    await editMessage(chatId, replyMsgId, body, { parseMode: 'MarkdownV2' });
+  } catch (e) {
+    console.error('[telegram] editMessage DISKON REJECT reason failed:', e);
+  }
 }
 
 // Telegram kadang kirim GET saat test endpoint

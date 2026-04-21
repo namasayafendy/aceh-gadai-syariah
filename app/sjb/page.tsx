@@ -10,6 +10,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import AppShell from '@/components/ui/AppShell';
 import PinModal from '@/components/ui/PinModal';
+import DiskonApprovalModal from '@/components/ui/DiskonApprovalModal';
 import { useOutletId } from '@/components/auth/AuthProvider';
 import { formatRp, formatMoneyInput, formatMoneyInputSigned, parseMoney, formatDate } from '@/lib/format';
 import { printSJB, printSJBTebus } from '@/lib/print';
@@ -190,6 +191,10 @@ export default function SJBPage() {
   const [bbPinOpen, setBbPinOpen] = useState(false);
   const [bbSuccess, setBbSuccess] = useState<any>(null);
   const [bbTotalSistem, setBbTotalSistem] = useState(0);
+  // Fase 3: Diskon Approval state (buyback tab)
+  const [bbDiskonWaitId, setBbDiskonWaitId] = useState<string | null>(null);
+  const [bbPendingSubmit, setBbPendingSubmit] = useState<{ pin: string; kasirName: string } | null>(null);
+  const [bbDiskonParentId, setBbDiskonParentId] = useState<string | null>(null);
 
   async function searchBuyback() {
     const bc = bbBarcode.trim().toUpperCase();
@@ -265,11 +270,50 @@ export default function SJBPage() {
     setBbError(''); setBbPinOpen(true);
   }
 
-  async function doSubmitBuyback(pin: string, kasirName: string) {
+  async function doSubmitBuyback(pin: string, kasirName: string, approvedIdDiskon?: string) {
     setBbPinOpen(false); setBbSubmitting(true); setBbError('');
     const jmlBayar = parseMoney(bbJmlBayarRaw);
     const cashVal = bbPayment === 'CASH' ? jmlBayar : bbPayment === 'BANK' ? 0 : parseMoney(bbCashRaw);
     const bankVal = bbPayment === 'BANK' ? jmlBayar : bbPayment === 'CASH' ? 0 : parseMoney(bbBankRaw);
+
+    // ── Fase 3: intercept kalau diskon ≥ 10.000 & belum di-approve ──
+    // SITA tidak masuk alur diskon approval (konsisten dgn tebus: SITA/JUAL dikecualikan).
+    const selisih = bbTotalSistem - jmlBayar;
+    const needApproval = bbStatus !== 'SITA' && selisih >= 10000;
+    if (needApproval && !approvedIdDiskon) {
+      try {
+        const res = await fetch('/api/diskon/request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-outlet-id': String(outletId) },
+          body: JSON.stringify({
+            pin, tipe: 'SJB',
+            statusTebus: bbStatus === 'PERPANJANG' ? 'PERPANJANG_SJB' : bbStatus,
+            refNoFaktur: bbData.no_faktur, idRef: bbData.id,
+            namaNasabah: bbData.nama, barang: bbData.barang,
+            jumlahPinjaman: Number(bbData.harga_jual || 0),
+            ujrahBerjalan: 0,
+            lamaTitip: 0,
+            totalSeharusnya: bbTotalSistem, jumlahBayar: jmlBayar,
+            alasan: bbAlasan.trim(),
+            idParent: bbDiskonParentId ?? undefined,
+          }),
+        });
+        const rjson = await res.json();
+        if (!rjson.ok) { setBbError(rjson.msg || 'Gagal kirim request diskon'); setBbSubmitting(false); return; }
+        if (rjson.needApproval === false) {
+          // Edge case: nominal turun di bawah threshold — lanjut submit langsung.
+        } else {
+          setBbPendingSubmit({ pin, kasirName });
+          setBbDiskonWaitId(rjson.idDiskon);
+          setBbSubmitting(false);
+          return;
+        }
+      } catch (e) {
+        setBbError('Error request diskon: ' + (e as Error).message);
+        setBbSubmitting(false); return;
+      }
+    }
+
     try {
       const res = await fetch('/api/sjb/buyback', {
         method: 'POST',
@@ -286,6 +330,8 @@ export default function SJBPage() {
           payment: bbPayment === 'SPLIT' ? 'SPLIT' : bbPayment,
           cash: cashVal, bank: bankVal,
           tanpaSurat: bbTanpaSurat, // FIX: pass tanpaSurat ke API
+          // Fase 3: id_diskon yg sudah di-approve Owner (hanya kalau butuh approval)
+          idDiskonApproved: approvedIdDiskon,
         }),
       });
       const json = await res.json();
@@ -305,8 +351,38 @@ export default function SJBPage() {
         _hariAktual: 0,
       });
       setBbBarcode(''); setBbData(null); setBbStatus(''); setBbJmlBayarRaw(''); setBbAlasan(''); setBbTanpaSurat(false);
+      // Fase 3: reset state approval setelah submit sukses
+      setBbDiskonWaitId(null); setBbPendingSubmit(null); setBbDiskonParentId(null);
     } catch (e) { setBbError('Server error: ' + (e as Error).message); }
     setBbSubmitting(false);
+  }
+
+  // ── Fase 3 handlers: Diskon approval callbacks (buyback) ─
+  function handleBbDiskonApproved() {
+    if (!bbPendingSubmit || !bbDiskonWaitId) return;
+    const { pin, kasirName } = bbPendingSubmit;
+    const approvedId = bbDiskonWaitId;
+    setBbDiskonWaitId(null);
+    setBbPendingSubmit(null);
+    setBbDiskonParentId(null);
+    doSubmitBuyback(pin, kasirName, approvedId);
+  }
+
+  function handleBbDiskonRejected(alasanReject: string) {
+    const parent = bbDiskonWaitId;
+    setBbDiskonWaitId(null);
+    setBbPendingSubmit(null);
+    if (parent) setBbDiskonParentId(parent);
+    setBbError(
+      `❌ Diskon ditolak Owner${alasanReject ? ': ' + alasanReject : ''}. ` +
+      `Silakan edit Jumlah Bayar, lalu submit ulang.`
+    );
+  }
+
+  function handleBbDiskonCancel() {
+    setBbDiskonWaitId(null);
+    setBbPendingSubmit(null);
+    // bbDiskonParentId JANGAN di-clear — kasir mungkin resubmit setelah tutup modal.
   }
 
   return (
@@ -571,6 +647,16 @@ export default function SJBPage() {
         onSuccess={(pin, k) => doSubmitAkad(pin, k)} onCancel={() => setAkadPinOpen(false)} />
       <PinModal open={bbPinOpen} action={`${bbStatus} — ${bbData?.no_faktur || ''}`}
         onSuccess={(pin, k) => doSubmitBuyback(pin, k)} onCancel={() => setBbPinOpen(false)} />
+
+      {/* Fase 3: Modal tunggu approval diskon SJB (≥ Rp 10.000) */}
+      {bbDiskonWaitId && (
+        <DiskonApprovalModal
+          idDiskon={bbDiskonWaitId}
+          onApproved={handleBbDiskonApproved}
+          onRejected={handleBbDiskonRejected}
+          onCancel={handleBbDiskonCancel}
+        />
+      )}
 
       {/* Success Modals */}
       {akadSuccess && (

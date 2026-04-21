@@ -9,6 +9,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import AppShell from '@/components/ui/AppShell';
 import PinModal from '@/components/ui/PinModal';
+import DiskonApprovalModal from '@/components/ui/DiskonApprovalModal';
 import { useOutletId } from '@/components/auth/AuthProvider';
 import { formatRp, formatMoneyInput, formatMoneyInputSigned, parseMoney, formatDate } from '@/lib/format';
 import { printTebus } from '@/lib/print';
@@ -78,6 +79,11 @@ export default function TebusPage() {
   const [todayList, setTodayList] = useState<TodayRow[]>([]);
   const [loadingList, setLoadingList] = useState(false);
   const [successData, setSuccessData] = useState<any>(null);
+
+  // Fase 3: Diskon Approval flow (hanya aktif kalau selisih ≥ 10.000)
+  const [diskonWaitId, setDiskonWaitId] = useState<string | null>(null);
+  const [pendingSubmit, setPendingSubmit] = useState<{ pin: string; kasirName: string } | null>(null);
+  const [diskonParentId, setDiskonParentId] = useState<string | null>(null);
 
   // Derived
   const jmlGadaiBaru = parseMoney(jmlGadaiBaruRaw);
@@ -290,9 +296,47 @@ export default function TebusPage() {
   }
 
   // ── Submit ─────────────────────────────────────────────
-  async function doSubmit(pin: string, kasirName: string) {
+  async function doSubmit(pin: string, kasirName: string, approvedIdDiskon?: string) {
     setPinOpen(false); setSubmitting(true); setError('');
     const d = gadaiData!;
+
+    // ── Fase 3: intercept kalau diskon ≥ 10.000 & belum di-approve ──
+    // Hanya status yg memang punya konsep diskon (sesuai backend).
+    const statusPerluDiskon = ['TEBUS', 'PERPANJANG', 'TAMBAH', 'KURANG'].includes(tebusStatus);
+    const needApproval = statusPerluDiskon && selisih >= 10000;
+    if (needApproval && !approvedIdDiskon) {
+      try {
+        const res = await fetch('/api/diskon/request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-outlet-id': String(outletId) },
+          body: JSON.stringify({
+            pin, tipe: 'TEBUS', statusTebus: tebusStatus,
+            refNoFaktur: d.no_faktur, idRef: d.id,
+            namaNasabah: d.nama, barang: d.barang,
+            jumlahPinjaman: d.jumlah_gadai,
+            ujrahBerjalan, lamaTitip: hariAktual,
+            totalSeharusnya: totalSistem, jumlahBayar: jmlBayar,
+            alasan: alasan.trim(),
+            idParent: diskonParentId ?? undefined,
+          }),
+        });
+        const rjson = await res.json();
+        if (!rjson.ok) { setError(rjson.msg || 'Gagal kirim request diskon'); setSubmitting(false); return; }
+        if (rjson.needApproval === false) {
+          // Edge case: nominal turun di bawah threshold — lanjut submit langsung.
+        } else {
+          // Tampilkan modal — tunggu owner approve/reject via Telegram.
+          setPendingSubmit({ pin, kasirName });
+          setDiskonWaitId(rjson.idDiskon);
+          setSubmitting(false);
+          return;
+        }
+      } catch (e) {
+        setError('Error request diskon: ' + (e as Error).message);
+        setSubmitting(false); return;
+      }
+    }
+
     const cashVal = tebusStatus === 'JUAL'
       ? (payment === 'CASH' ? sisaKonsumen : parseMoney(cashRaw))
       : (payment === 'CASH' ? jmlBayar : parseMoney(cashRaw));
@@ -321,6 +365,8 @@ export default function TebusPage() {
           jumlahBayar: jmlBayar, jumlahDibayarkan: jmlBayar,
           alasan: alasan.trim(), payment: payment === 'SPLIT' ? 'SPLIT' : payment,
           cash: cashVal, bank: bankVal,
+          // Fase 3: id_diskon yg sudah di-approve Owner (hanya dikirim kalau butuh approval)
+          idDiskonApproved: approvedIdDiskon,
         }),
       });
       const json = await res.json();
@@ -396,6 +442,36 @@ export default function TebusPage() {
     setSubmitting(false);
   }
 
+  // ── Fase 3 handlers: Diskon approval callbacks ─────────
+  function handleDiskonApproved() {
+    if (!pendingSubmit || !diskonWaitId) return;
+    const { pin, kasirName } = pendingSubmit;
+    const approvedId = diskonWaitId;
+    setDiskonWaitId(null);
+    setPendingSubmit(null);
+    setDiskonParentId(null); // request sukses — tidak perlu link parent lagi
+    // Lanjutkan submit dengan id_diskon yg sudah APPROVED
+    doSubmit(pin, kasirName, approvedId);
+  }
+
+  function handleDiskonRejected(alasanReject: string) {
+    const parent = diskonWaitId;
+    setDiskonWaitId(null);
+    setPendingSubmit(null);
+    if (parent) setDiskonParentId(parent); // next request link ke parent ini
+    setError(
+      `❌ Diskon ditolak Owner${alasanReject ? ': ' + alasanReject : ''}. ` +
+      `Silakan edit Jumlah Bayar, lalu submit ulang.`
+    );
+  }
+
+  function handleDiskonCancel() {
+    setDiskonWaitId(null);
+    setPendingSubmit(null);
+    // diskonParentId JANGAN di-clear — kasir mungkin resubmit setelah tutup modal.
+    // Row tb_diskon tetap PENDING/REJECTED di DB; Owner masih bisa approve nanti.
+  }
+
   function resetForm() {
     setBarcode(''); setGadaiData(null); setTebusStatus(''); setStatusDisabled(false);
     setSearchError(''); setError(''); setTanpaSurat(false);
@@ -405,6 +481,8 @@ export default function TebusPage() {
     setJmlBayarRaw(''); setAlasan('');
     setPayment('CASH'); setCashRaw(''); setBankRaw('');
     setTrfNama(''); setTrfNoRek(''); setTrfBank('');
+    // Fase 3: reset diskon approval state
+    setDiskonWaitId(null); setPendingSubmit(null); setDiskonParentId(null);
   }
 
   const showBaru = ['TAMBAH', 'KURANG'].includes(tebusStatus);
@@ -702,6 +780,16 @@ export default function TebusPage() {
 
       <PinModal open={pinOpen} action={`${tebusStatus} — ${gadaiData?.no_faktur || ''}`}
         onSuccess={(pin, kasir) => doSubmit(pin, kasir)} onCancel={() => setPinOpen(false)} />
+
+      {/* Fase 3: Modal tunggu approval diskon (≥ Rp 10.000) */}
+      {diskonWaitId && (
+        <DiskonApprovalModal
+          idDiskon={diskonWaitId}
+          onApproved={handleDiskonApproved}
+          onRejected={handleDiskonRejected}
+          onCancel={handleDiskonCancel}
+        />
+      )}
 
       {successData && (
         <div className="success-overlay" onClick={() => setSuccessData(null)}>
