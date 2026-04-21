@@ -136,7 +136,10 @@ export default function SJBPage() {
             body: JSON.stringify({
               pin, tipe: 'SJB',
               // SJB submit response return `noSJB` (bukan `noFaktur`) — fallback utk safety
-              refTable: 'tb_sjb', refNoFaktur: json.noSJB ?? json.noFaktur, refId: json.idSJB ?? null,
+              // ref_id column di tb_transfer_request bertipe bigint, sedangkan json.idSJB berupa string
+              // (contoh: "SJB-1-20260421-6015") → kirim null supaya INSERT tidak 400. Samakan pattern
+              // dengan gadai/tambah/tebus yg juga pakai null.
+              refTable: 'tb_sjb', refNoFaktur: json.noSJB ?? json.noFaktur, refId: null,
               nominal: bankVal,
               namaPenerima: akadTrfNama.trim(), noRek: akadTrfNoRek.trim(), bank: akadTrfBank.trim(),
               namaNasabah: nama.trim(), barang: barang.trim(),
