@@ -2,25 +2,34 @@
 // ACEH GADAI SYARIAH - Transfer Reminder Cron (Fase 2+)
 // File: app/api/transfer/remind/route.ts
 //
-// Dipanggil Vercel Cron tiap menit. Scan semua PENDING transfer
-// request yang sudah punya telegram_chat_id + telegram_message_id,
-// lalu kirim reminder ke grup supaya tidak terlewat.
+// Dipanggil Supabase pg_cron (atau Vercel Cron kalau pakai Pro)
+// tiap menit. Scan semua PENDING transfer request yang sudah punya
+// telegram_chat_id + telegram_message_id, lalu:
+//   1. HAPUS reminder sebelumnya (kalau ada)      → chat tidak spam
+//   2. KIRIM reminder baru (reply ke pesan asli)  → HP tetap notif
+//   3. Simpan message_id reminder baru sebagai last_reminder_message_id
 //
 // Guardrails:
 // - Dilindungi CRON_SECRET (Authorization: Bearer <secret>).
-// - Reminder di-reply ke pesan asli supaya thread tetap rapi.
 // - Reminder berhenti otomatis kalau status sudah APPROVED/REJECTED
-//   (karena query memang hanya scan status='PENDING').
+//   (karena query hanya scan status='PENDING').
 // - Burst (kirim ulang dalam 1 invocation) bisa diatur via env
 //   REMINDER_BURST_PER_MINUTE (default 1, max 10).
+// - Pesan asli (telegram_message_id) TIDAK PERNAH disentuh.
 // - TIDAK mengubah alur kas.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
-import { sendTelegram, inlineButtons, escapeMd, formatRpMd } from '@/lib/telegram';
+import {
+  sendTelegram,
+  inlineButtons,
+  escapeMd,
+  formatRpMd,
+  deleteMessageTelegram,
+} from '@/lib/telegram';
 
-// Vercel Hobby plan serverless timeout default 10s; minta 60s karena burst loop.
+// Vercel serverless timeout default 10s; minta 60s karena burst loop bisa > 30s.
 export const maxDuration = 60;
 
 function sleep(ms: number): Promise<void> {
@@ -42,6 +51,7 @@ type PendingRow = {
   telegram_chat_id: number | null;
   telegram_message_id: number | null;
   reminder_count: number | null;
+  last_reminder_message_id: number | null;
 };
 
 const TIPE_LABEL: Record<string, string> = {
@@ -54,7 +64,7 @@ async function sendReminderSweep(db: ReturnType<typeof createServiceClient> exte
   // Urut: yang paling lama belum di-remind / belum pernah di-remind duluan.
   const { data: rows, error } = await db
     .from('tb_transfer_request')
-    .select('id, outlet_id, tipe, ref_no_faktur, nominal, nama_penerima, no_rek, bank, catatan, requested_by_nama, requested_at, telegram_chat_id, telegram_message_id, reminder_count')
+    .select('id, outlet_id, tipe, ref_no_faktur, nominal, nama_penerima, no_rek, bank, catatan, requested_by_nama, requested_at, telegram_chat_id, telegram_message_id, reminder_count, last_reminder_message_id')
     .eq('status', 'PENDING')
     .not('telegram_chat_id', 'is', null)
     .order('last_reminder_at', { ascending: true, nullsFirst: true })
@@ -83,6 +93,18 @@ async function sendReminderSweep(db: ReturnType<typeof createServiceClient> exte
   for (const req of pendingRows) {
     if (!req.telegram_chat_id) continue;
 
+    // ── Step 1: HAPUS reminder lama (kalau ada) supaya chat tidak spam ──
+    if (req.last_reminder_message_id) {
+      try {
+        await deleteMessageTelegram(req.telegram_chat_id, req.last_reminder_message_id);
+      } catch (e) {
+        // best-effort: kalau gagal hapus (msg sudah > 48 jam atau permission hilang),
+        // biarkan & lanjut. Tidak fatal.
+        console.warn('[transfer/remind] delete prev reminder gagal:', e);
+      }
+    }
+
+    // ── Step 2: Susun & kirim reminder baru ──
     const outletName = await getOutletName(req.outlet_id);
     const tipeLabel = TIPE_LABEL[req.tipe] ?? req.tipe;
     const ageMs = Date.now() - new Date(req.requested_at).getTime();
@@ -115,8 +137,10 @@ async function sendReminderSweep(db: ReturnType<typeof createServiceClient> exte
 
     if (sendRes.ok) {
       sent++;
+      // ── Step 3: simpan message_id reminder baru + tracking ──
       await db.from('tb_transfer_request').update({
         last_reminder_at: new Date().toISOString(),
+        last_reminder_message_id: sendRes.messageId ?? null,
         reminder_count: (req.reminder_count ?? 0) + 1,
       }).eq('id', req.id);
 
@@ -147,7 +171,7 @@ async function sendReminderSweep(db: ReturnType<typeof createServiceClient> exte
 
 async function handle(request: NextRequest) {
   const auth = request.headers.get('authorization');
-  // Vercel Cron mengirim Authorization: Bearer <CRON_SECRET>
+  // Authorization: Bearer <CRON_SECRET>
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ ok: false, msg: 'Unauthorized' }, { status: 401 });
   }
@@ -156,7 +180,6 @@ async function handle(request: NextRequest) {
     const db = await createServiceClient();
 
     // Berapa kali burst dalam 1 invocation (default 1, max 10).
-    // Kalau mau 10x/menit: set env REMINDER_BURST_PER_MINUTE=10 di Vercel.
     const rawBurst = parseInt(process.env.REMINDER_BURST_PER_MINUTE ?? '1', 10);
     const burst = Math.min(10, Math.max(1, isNaN(rawBurst) ? 1 : rawBurst));
     // Total 55 detik supaya aman dari maxDuration=60

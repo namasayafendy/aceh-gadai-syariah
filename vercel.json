@@ -4,10 +4,6 @@
     {
       "path": "/api/backup/nightly",
       "schedule": "0 16 * * *"
-    },
-    {
-      "path": "/api/transfer/remind",
-      "schedule": "* * * * *"
     }
   ]
 }

@@ -109,6 +109,19 @@ export async function editMessageKeyboard(
   });
 }
 
+export async function deleteMessageTelegram(
+  chatId: number | string,
+  messageId: number
+): Promise<boolean> {
+  // Telegram API: deleteMessage — bot harus punya hak hapus pesannya sendiri
+  // (selalu boleh untuk pesan yg dikirim bot itu sendiri, < 48 jam).
+  const res = await tgCall('deleteMessage', {
+    chat_id: chatId,
+    message_id: messageId,
+  });
+  return !!res.ok;
+}
+
 export async function answerCallback(
   callbackQueryId: string,
   text?: string,
