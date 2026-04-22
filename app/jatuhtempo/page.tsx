@@ -84,6 +84,167 @@ function mapRow(r: any): JTRow {
   return { ...r, _jtStatus: status, _sisaHari: sisa, _lamaHari: lama, _totalBayar: totalBayar };
 }
 
+// ── Print: Semua kontrak jatuh tempo (gadai di atas, SJB di bawah) ──
+function printJatuhTempo(gadai: JTRow[], sjb: JTRow[], outletLabel: string) {
+  const R = (v: number) => 'Rp ' + (v || 0).toLocaleString('id-ID');
+  const fD = (d: string) => d ? new Date(d).toLocaleDateString('id-ID') : '—';
+  const tgl = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+
+  function rows(list: JTRow[]) {
+    if (list.length === 0) return '<tr><td colspan="12" style="padding:12px;text-align:center;color:#888">Tidak ada</td></tr>';
+    return list.map((r, i) => {
+      const statColor = r._jtStatus === 'LEWAT WAKTU' ? '#dc2626' : r._jtStatus === 'JATUH TEMPO' ? '#d97706' : '#15803d';
+      const sisaText = r._sisaHari < 0 ? `${Math.abs(r._sisaHari)} hr lewat` : r._sisaHari === 0 ? 'HARI INI' : `${r._sisaHari} hari`;
+      return `<tr style="border-bottom:1px solid #ddd">
+        <td>${i + 1}</td>
+        <td style="font-family:monospace">${r.no_faktur}</td>
+        <td>${r.nama}</td>
+        <td style="font-size:9px">${r.telp1 || '—'}${r.telp2 ? '<br>' + r.telp2 : ''}</td>
+        <td>${r.barang}</td>
+        <td class="num">${R(r.jumlah_gadai)}</td>
+        <td class="num" style="font-weight:bold">${R(r._totalBayar)}</td>
+        <td style="text-align:center">${r._lamaHari} hr</td>
+        <td>${fD(r.tgl_jt)}</td>
+        <td>${fD(r.tgl_sita)}</td>
+        <td class="num" style="color:${statColor};font-weight:bold">${sisaText}</td>
+        <td style="font-size:9px;font-weight:bold;color:${statColor}">${r._jtStatus}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  const thRow = `<tr style="background:#f0f0f0">
+    <th>No</th><th>No Faktur</th><th>Nama</th><th>No HP</th><th>Barang</th>
+    <th class="num">Pinjaman</th><th class="num">Total Bayar</th><th>Lama</th>
+    <th>Tgl JT</th><th>Tgl Sita</th><th class="num">Sisa/Lewat</th><th>Status</th>
+  </tr>`;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Jatuh Tempo ${new Date().toLocaleDateString('sv-SE')}</title>
+    <style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      @page{size:A4 landscape;margin:10mm}
+      body{font-family:Arial,sans-serif;font-size:10px;padding:8mm}
+      table{width:100%;border-collapse:collapse;margin-bottom:12px}
+      th,td{padding:4px 6px;border:1px solid #ccc;text-align:left;vertical-align:top}
+      th{font-weight:bold;font-size:9px}
+      .num{text-align:right}
+      h2{margin-bottom:4px;font-size:14px}
+      h3{margin:12px 0 4px;font-size:11px;border-bottom:2px solid #2563eb;padding-bottom:3px;color:#2563eb}
+      h3.sjb{border-color:#d97706;color:#d97706}
+      .noprint{margin-bottom:8px}
+      @media print{.noprint{display:none}}
+    </style></head><body>
+    <div class="noprint">
+      <button onclick="window.print()" style="padding:5px 14px;margin-right:6px">Print / Simpan PDF</button>
+      <button onclick="window.close()">Tutup</button>
+    </div>
+    <h2>DAFTAR JATUH TEMPO — ${outletLabel}</h2>
+    <p style="margin-bottom:10px;color:#555">${tgl} &mdash; Total: ${gadai.length + sjb.length} kontrak (Gadai: ${gadai.length}, SJB: ${sjb.length})</p>
+
+    <h3>GADAI (${gadai.length})</h3>
+    <table>${thRow}<tbody>${rows(gadai)}</tbody></table>
+
+    <h3 class="sjb">JUAL TITIP / SJB (${sjb.length})</h3>
+    <table>${thRow}<tbody>${rows(sjb)}</tbody></table>
+
+    <p style="margin-top:16px;font-size:9px;color:#888">Dicetak: ${new Date().toLocaleString('id-ID')}</p>
+  </body></html>`;
+
+  const win = window.open('', '_blank', 'width=1200,height=800,scrollbars=yes');
+  if (!win) { alert('Izinkan popup untuk mencetak.'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 600);
+}
+
+// ── CSV helpers ─────────────────────────────────────────
+function fmtTglDDMMYYYY(s: string): string {
+  if (!s) return '';
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return '';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+// Ex: 200426_1053
+function csvStampSuffix(): string {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(2);
+  const HH = String(d.getHours()).padStart(2, '0');
+  const MM = String(d.getMinutes()).padStart(2, '0');
+  return `${dd}${mm}${yy}_${HH}${MM}`;
+}
+
+// Escape field untuk CSV: quoted + escape internal quote jadi "".
+function csvQ(v: string | null | undefined): string {
+  return `"${String(v ?? '').replace(/"/g, '""')}"`;
+}
+
+// Field telepon dgn trick Excel text-format: '"<digits>"
+function csvPhone(v: string | null | undefined): string {
+  const digits = String(v ?? '').replace(/"/g, '');
+  return `'"${digits}"`;
+}
+
+function downloadCSV(filename: string, content: string) {
+  // UTF-8 BOM supaya Excel baca Unicode dgn benar
+  const blob = new Blob(['\ufeff' + content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function buildCsvGadai(rows: JTRow[]): string {
+  const header = 'No,No Faktur,Nama,Tgl Gadai,Lama Gadai,Taksiran,Jumlah Pinjaman,Total Gadai,Kategori,Barang,Telpon 1,Telpon 2,Outlet';
+  const lines = rows.map((r, i) => {
+    const no          = i + 1;
+    const noFaktur    = csvQ(r.no_faktur);
+    const nama        = csvQ(r.nama);
+    const tglGadai    = fmtTglDDMMYYYY(r.tgl_gadai);
+    const lama        = r._lamaHari;
+    const taksiran    = Number(r.taksiran || 0);
+    const pinjaman    = Number(r.jumlah_gadai || 0);
+    const totalGadai  = Number(r._totalBayar || 0);
+    const kategori    = csvQ(r.kategori);
+    const barang      = csvQ(r.barang);
+    const telp1       = csvPhone(r.telp1);
+    const telp2       = csvPhone(r.telp2);
+    const outlet      = csvQ(r.outlet);
+    return `${no},${noFaktur},${nama},${tglGadai},${lama},${taksiran},${pinjaman},${totalGadai},${kategori},${barang},${telp1},${telp2},${outlet}`;
+  });
+  return [header, ...lines, ''].join('\r\n');
+}
+
+function buildCsvSjb(rows: JTRow[]): string {
+  const header = 'No,No Faktur,Nama,Tgl Jual,Lama Waktu,Jatuh Tempo,Harga Jual,Harga Buyback,Kategori,Barang,No HP,Outlet';
+  const lines = rows.map((r, i) => {
+    const no           = i + 1;
+    const noFaktur     = csvQ(r.no_faktur);
+    const nama         = csvQ(r.nama);
+    const tglJual      = fmtTglDDMMYYYY(r.tgl_gadai);
+    const lamaWaktu    = Number(r.lama_titip || 0);
+    const jatuhTempo   = fmtTglDDMMYYYY(r.tgl_jt);
+    const hargaJual    = Number(r.harga_jual || 0);
+    const hargaBuyback = Number(r.harga_buyback || 0);
+    const kategori     = csvQ(r.kategori);
+    const barang       = csvQ(r.barang);
+    const noHp         = csvPhone(r.telp1);
+    const outlet       = csvQ(r.outlet);
+    return `${no},${noFaktur},${nama},${tglJual},${lamaWaktu},${jatuhTempo},${hargaJual},${hargaBuyback},${kategori},${barang},${noHp},${outlet}`;
+  });
+  return [header, ...lines, ''].join('\r\n');
+}
+
 // ── Print: hanya data LEWAT WAKTU ─────────────────────────────
 function printLewatWaktu(gadai: JTRow[], sjb: JTRow[]) {
   const R = (v: number) => 'Rp ' + (v || 0).toLocaleString('id-ID');
@@ -204,6 +365,23 @@ export default function JatuhTempoPage() {
   const filteredGadai = applyFilter(gadaiRows);
   const filteredSjb = applyFilter(sjbRows);
 
+  // Outlet label untuk filename/judul PDF. Prefer outlet dari baris data; fallback "Outlet {id}".
+  const outletLabel = (gadaiRows[0]?.outlet || sjbRows[0]?.outlet || `Outlet ${outletId}`).trim();
+
+  const handlePrintJT = () => printJatuhTempo(gadaiRows, sjbRows, outletLabel);
+
+  const handleCsvGadai = () => {
+    if (gadaiRows.length === 0) { alert('Tidak ada data gadai untuk di-export.'); return; }
+    const fn = `Data Jatuh Tempo Gadai ${outletLabel} Per ${csvStampSuffix()}.csv`;
+    downloadCSV(fn, buildCsvGadai(gadaiRows));
+  };
+
+  const handleCsvSjb = () => {
+    if (sjbRows.length === 0) { alert('Tidak ada data SJB untuk di-export.'); return; }
+    const fn = `Data Jatuh Tempo Jualtitip ${outletLabel} Per ${csvStampSuffix()}.csv`;
+    downloadCSV(fn, buildCsvSjb(sjbRows));
+  };
+
   // Table header style
   const th: React.CSSProperties = { padding: '8px 10px', textAlign: 'left', fontSize: 10, color: 'var(--text3)', fontWeight: 700, textTransform: 'uppercase', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' };
   const thR: React.CSSProperties = { ...th, textAlign: 'right' };
@@ -232,7 +410,6 @@ export default function JatuhTempoPage() {
           {formatRp(r._totalBayar)}
         </td>
         <td style={{ padding: '7px 10px', textAlign: 'center', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700 }}>{r._lamaHari} hr</td>
-        <td style={{ padding: '7px 10px', fontFamily: 'var(--mono)', fontSize: 11 }}>{formatDate(r.tgl_jt)}</td>
         <td style={{ padding: '7px 10px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)' }}>{r.tgl_sita ? formatDate(r.tgl_sita) : '—'}</td>
         <td style={{ padding: '7px 10px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: 11, color: r._jtStatus === 'LEWAT WAKTU' ? 'var(--red)' : r._jtStatus === 'JATUH TEMPO' ? 'var(--warn)' : 'var(--green)' }}>
           {r._sisaHari < 0 ? `${Math.abs(r._sisaHari)} hr lewat` : r._sisaHari === 0 ? 'HARI INI' : `${r._sisaHari} hari`}
