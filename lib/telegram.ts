@@ -134,6 +134,50 @@ export async function answerCallback(
   });
 }
 
+// ── Send document (PDF/file) via multipart/form-data ──
+// Dipakai untuk kirim laporan malam PDF (cron jam 01:00 WIB).
+// Catatan: tidak pakai tgCall() karena itu JSON-only; sendDocument
+// butuh multipart/form-data utk attach file.
+export interface SendDocumentResult {
+  ok: boolean;
+  messageId?: number;
+  error?: string;
+}
+
+export async function sendTelegramDocument(
+  chatId: number | string,
+  fileBuffer: Buffer | Uint8Array,
+  filename: string,
+  options: { caption?: string; parseMode?: 'MarkdownV2' | 'HTML' | 'Markdown'; contentType?: string } = {}
+): Promise<SendDocumentResult> {
+  const token = getToken();
+  try {
+    const form = new FormData();
+    form.append('chat_id', String(chatId));
+    if (options.caption) form.append('caption', options.caption);
+    if (options.parseMode) form.append('parse_mode', options.parseMode);
+
+    const blob = new Blob([new Uint8Array(fileBuffer)], {
+      type: options.contentType ?? 'application/pdf',
+    });
+    form.append('document', blob, filename);
+
+    const res = await fetch(`${API_BASE}${token}/sendDocument`, {
+      method: 'POST',
+      body: form,
+    });
+    const json = await res.json();
+    if (!json.ok) {
+      console.error('[telegram] sendDocument failed:', json.description);
+      return { ok: false, error: json.description };
+    }
+    return { ok: true, messageId: json.result?.message_id };
+  } catch (err) {
+    console.error('[telegram] sendDocument network error:', err);
+    return { ok: false, error: String(err) };
+  }
+}
+
 // ── File download (untuk bukti transfer foto) ──
 export async function getFileUrl(fileId: string): Promise<string | null> {
   const res = await tgCall('getFile', { file_id: fileId });

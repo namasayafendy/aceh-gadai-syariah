@@ -95,6 +95,9 @@ async function handleMessage(db: any, msg: any) {
   if (cmd === '/register') {
     return handleRegister(db, chatId, arg.toUpperCase(), msg);
   }
+  if (cmd === '/register-laporan' || cmd === '/registerlaporan') {
+    return handleRegisterLaporan(db, chatId, arg.toUpperCase(), msg);
+  }
   if (cmd === '/whoami') {
     return sendTelegram(
       chatId,
@@ -314,6 +317,76 @@ async function handleRegister(db: any, chatId: number, kode: string, msg: any) {
     { parseMode: 'MarkdownV2' });
 }
 
+// ── /register-laporan KODE ──
+// Daftar 1 grup global utk terima PDF laporan malam tiap jam 01:00 WIB.
+// Beda dgn /register: tidak terkait outlet, simpan ke app_settings.
+async function handleRegisterLaporan(db: any, chatId: number, kode: string, msg: any) {
+  if (!kode) {
+    return sendTelegram(
+      chatId,
+      escapeMd('Format: /register-laporan KODE-DARI-DASHBOARD'),
+      { parseMode: 'MarkdownV2' }
+    );
+  }
+
+  const { data: row } = await db.from('telegram_register_codes')
+    .select('*').eq('kode', kode).maybeSingle();
+
+  if (!row) {
+    return sendTelegram(chatId,
+      escapeMd('❌ Kode tidak ditemukan. Periksa kembali dari dashboard Owner.'),
+      { parseMode: 'MarkdownV2' });
+  }
+  if (row.purpose && row.purpose !== 'LAPORAN_MALAM') {
+    return sendTelegram(chatId,
+      escapeMd('❌ Kode ini bukan untuk grup laporan malam. Generate kode "Setup Grup Laporan Malam" di dashboard.'),
+      { parseMode: 'MarkdownV2' });
+  }
+  if (row.used_at) {
+    return sendTelegram(chatId,
+      escapeMd('❌ Kode sudah pernah dipakai. Generate kode baru di dashboard.'),
+      { parseMode: 'MarkdownV2' });
+  }
+  if (new Date(row.expires_at) < new Date()) {
+    return sendTelegram(chatId,
+      escapeMd('❌ Kode sudah kedaluwarsa (lebih dari 15 menit). Generate kode baru.'),
+      { parseMode: 'MarkdownV2' });
+  }
+
+  const groupTitle = msg.chat?.title ?? '(tanpa nama)';
+  const username = msg.from?.username ?? '';
+  const nowIso = new Date().toISOString();
+
+  // Simpan chat_id ke app_settings (3 keys)
+  const upserts = [
+    { key: 'laporan_malam_chat_id',       value: String(chatId),    updated_at: nowIso, updated_by: username || 'telegram' },
+    { key: 'laporan_malam_group_title',   value: String(groupTitle), updated_at: nowIso, updated_by: username || 'telegram' },
+    { key: 'laporan_malam_registered_at', value: nowIso,             updated_at: nowIso, updated_by: username || 'telegram' },
+  ];
+  for (const row2 of upserts) {
+    const { error } = await db.from('app_settings').upsert(row2, { onConflict: 'key' });
+    if (error) {
+      return sendTelegram(chatId,
+        escapeMd(`❌ Gagal simpan: ${error.message}`),
+        { parseMode: 'MarkdownV2' });
+    }
+  }
+
+  // Tandai kode sudah dipakai
+  await db.from('telegram_register_codes').update({
+    used_at: nowIso,
+    used_by_chat_id: chatId,
+    used_by_user: username,
+  }).eq('kode', kode);
+
+  return sendTelegram(chatId,
+    `✅ *Grup laporan malam terdaftar*\n\n` +
+    `Grup: ${escapeMd(groupTitle)}\n\n` +
+    `Setiap hari jam *01:00 WIB* bot akan kirim PDF laporan malam ` +
+    `semua outlet ke grup ini \\(1 outlet \\= 1 PDF\\)\\.`,
+    { parseMode: 'MarkdownV2' });
+}
+
 // ── Callback query handler (tap tombol inline) ──
 async function handleCallback(db: any, cb: any) {
   const data: string = cb.data ?? '';
@@ -518,6 +591,7 @@ async function handleDiskonDecision(
     return answerCallback(cb.id, '✅ Diskon di-approve. Kasir lanjutkan submit.', false);
   }
 
+  // REJECT
   // REJECT
   await db.from('tb_diskon').update({
     status: 'REJECTED',

@@ -1,0 +1,56 @@
+feat(diskon): Fase 3 - approval diskon >= Rp 10.000 via Telegram
+
+Tambah alur approval Owner-via-Telegram untuk diskon besar di transaksi
+tebus & buyback SJB. Alur kas tidak disentuh - insert tb_tebus/tb_kas
+tetap di /api/tebus/submit dan /api/sjb/buyback, hanya di-gate oleh
+row tb_diskon berstatus APPROVED.
+
+Threshold: selisih >= Rp 10.000 -> wajib approval.
+           9.001-9.999          -> jalur lama (tanpa approval).
+           SITA/JUAL            -> tidak kena diskon (konsisten).
+
+Schema (migrations/010_diskon_approval.sql, ADDITIVE):
+- tb_diskon: + status, id_parent, outlet_id, lama_gadai_hari,
+  requested_*, approver_*, rejected_*, alasan_reject,
+  telegram_chat_id/message_id, finalized_at
+- Kolom legacy `approved text` dipertahankan untuk laporan lama
+- Row existing auto DONE (tidak terpengaruh)
+- Index: (status,requested_at) partial, (outlet_id,tgl),
+  (id_parent) partial
+
+Backend:
+- POST /api/diskon/request  : insert tb_diskon PENDING + kirim notif
+  Telegram ke grup outlet (MarkdownV2, inline buttons approve/reject)
+- GET  /api/diskon/list     : riwayat dgn filter outletId/status/tgl,
+  OWNER cross-outlet, non-OWNER dikunci outlet sendiri
+- /api/telegram/webhook     : + handleDiskonDecision (callback
+  approve:DSK:.../reject:DSK:...) + handleDiskonRejectReason (text
+  reply pasca-reject untuk isi alasan_reject)
+- /api/tebus/submit         : tolak submit kalau selisih >= 10.000
+  tanpa idDiskonApproved valid; validasi outlet match, status=APPROVED,
+  !finalized_at, besaran_potongan match +/-1. Finalisasi -> DONE
+  + finalized_at + id_tebus
+- /api/sjb/buyback          : sama dgn tebus, exclude SITA
+
+Frontend:
+- components/ui/DiskonApprovalModal.tsx : 3-state modal (PENDING
+  w/ timer + Batal Tunggu, APPROVED w/ Lanjutkan Submit + "ting"
+  audio via Web Audio, REJECTED w/ alasan + Ajukan Ulang).
+  Supabase realtime + 5s polling fallback
+- app/tebus/page.tsx, app/sjb/page.tsx : intercept submit, stash
+  pending PIN+kasir, render modal, opsi A (manual Lanjutkan Submit
+  setelah approve; preserve id_parent on reject untuk resubmit)
+- app/diskon/page.tsx       : halaman Riwayat Diskon dgn filter
+  outlet/status/tgl, 5 summary card, tabel 13-14 kolom termasuk
+  Alasan, Owner/Kasir, Resubmit (id_parent). Legacy rows fallback DONE
+- components/ui/Sidebar.tsx : nav "Riwayat Diskon" di section Transaksi
+
+Backup: lib/backup/runBackup.ts sudah include tb_diskon - kolom baru
+otomatis masuk backup malam karena pakai SELECT *.
+
+Safety:
+- lib/db/kas.ts & alur kas TIDAK disentuh
+- Multi-outlet: /api/diskon/* pakai header x-outlet-id, OWNER bebas,
+  non-OWNER scoped
+- PIN divalidasi via validate_pin RPC
+- Server-side guard untuk idDiskonApproved (anti-bypass client)

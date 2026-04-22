@@ -4,6 +4,10 @@
     {
       "path": "/api/backup/nightly",
       "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/laporan/nightly-send",
+      "schedule": "0 18 * * *"
     }
   ]
 }

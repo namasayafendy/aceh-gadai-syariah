@@ -30,6 +30,11 @@ interface BotInfo {
   me?: { id: number; username: string; first_name: string } | null;
   webhook?: { url: string; has_custom_certificate: boolean; pending_update_count: number; last_error_message?: string } | null;
 }
+interface LaporanSettings {
+  chatId: number | null;
+  groupTitle: string | null;
+  registeredAt: string | null;
+}
 
 export default function TelegramSettingsPage() {
   const user = useSessionUser();
@@ -48,20 +53,26 @@ export default function TelegramSettingsPage() {
   // Register code state (per outlet)
   const [codeInfo, setCodeInfo] = useState<Record<number, { kode: string; expiresAt: string }>>({});
 
+  // Laporan Malam grup (1 grup global)
+  const [laporanSettings, setLaporanSettings] = useState<LaporanSettings | null>(null);
+  const [laporanCode, setLaporanCode] = useState<{ kode: string; expiresAt: string } | null>(null);
+
   // PIN modal
   const [pinAction, setPinAction] = useState<null | { kind: string; payload?: any; title: string }>(null);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [bot, aps, outs] = await Promise.all([
+      const [bot, aps, outs, lap] = await Promise.all([
         fetch('/api/telegram/set-webhook').then(r => r.json()),
         fetch('/api/settings/telegram/approvers').then(r => r.json()),
         fetch('/api/settings/telegram/register-code').then(r => r.json()),
+        fetch('/api/settings/telegram/laporan-code').then(r => r.json()),
       ]);
       if (bot.ok) setBotInfo({ me: bot.me, webhook: bot.webhook });
       if (aps.ok) setApprovers(aps.rows);
       if (outs.ok) setOutlets(outs.outlets);
+      if (lap.ok) setLaporanSettings(lap.settings);
     } catch (err) {
       setMsg({ type: 'err', text: 'Gagal load data: ' + String(err) });
     } finally {
@@ -124,6 +135,21 @@ export default function TelegramSettingsPage() {
           body: JSON.stringify({ pin, outletId: payload.outletId }),
         }).then(x => x.json());
         if (r.ok) showMsg('ok', 'Test terkirim ke grup');
+        else showMsg('err', r.msg ?? 'Gagal');
+      } else if (kind === 'genLaporanCode') {
+        const r = await fetch('/api/settings/telegram/laporan-code', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin }),
+        }).then(x => x.json());
+        if (r.ok) {
+          setLaporanCode({ kode: r.kode, expiresAt: r.expiresAt });
+          showMsg('ok', 'Kode dibuat. Berlaku 15 menit.');
+        } else showMsg('err', r.msg ?? 'Gagal');
+      } else if (kind === 'unregisterLaporan') {
+        const r = await fetch(`/api/settings/telegram/laporan-code?pin=${encodeURIComponent(pin)}`, {
+          method: 'DELETE',
+        }).then(x => x.json());
+        if (r.ok) { showMsg('ok', 'Grup laporan di-unlink'); setLaporanCode(null); loadAll(); }
         else showMsg('err', r.msg ?? 'Gagal');
       }
     } catch (err) {
@@ -299,6 +325,7 @@ export default function TelegramSettingsPage() {
                         {code && (
                           <div style={{ marginTop: 6, padding: 8, background: 'var(--surface2)', borderRadius: 6, fontSize: 11 }}>
                             <div><b>Kode:</b> <code style={{ fontSize: 13, fontWeight: 700, userSelect: 'all' }}>{code.kode}</code></div>
+
                             <div style={{ marginTop: 4, color: 'var(--text3)' }}>
                               1. Buat grup Telegram baru<br />
                               2. Invite <b>@sistem_gadai_bot</b> ke grup, jadikan admin<br />
@@ -316,6 +343,57 @@ export default function TelegramSettingsPage() {
               </tbody>
             </table>
           </div>
+        </section>
+
+        {/* Section 4 — Grup Laporan Malam (1 grup global, kirim PDF setiap 01:00 WIB) */}
+        <section className="card" style={{ marginBottom: 20, padding: 16 }}>
+          <h2 style={{ fontSize: 16, marginBottom: 4 }}>📊 Grup Laporan Malam (auto kirim PDF)</h2>
+          <p style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 12 }}>
+            Setiap hari jam <b>01:00 WIB</b> bot kirim PDF laporan malam <b>semua outlet</b> ke 1 grup ini
+            (1 outlet = 1 PDF). Outlet baru otomatis ikut terkirim.
+          </p>
+          {laporanSettings?.chatId ? (
+            <div>
+              <div style={{ marginBottom: 8 }}>
+                <span className="badge" style={{ background: 'var(--green-dim)', color: 'var(--green)' }}>
+                  ✅ Terhubung
+                </span>
+                <span style={{ marginLeft: 8, fontSize: 12 }}>
+                  {laporanSettings.groupTitle ?? '(tanpa nama)'}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
+                Chat ID: <code>{laporanSettings.chatId}</code>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 10 }}>
+                Terdaftar: {laporanSettings.registeredAt ? new Date(laporanSettings.registeredAt).toLocaleString('id-ID') : '—'}
+              </div>
+              <button className="btn btn-danger btn-sm"
+                onClick={() => setPinAction({ kind: 'unregisterLaporan', payload: {}, title: 'Unlink Grup Laporan' })}>
+                🔗❌ Unlink Grup
+              </button>
+            </div>
+          ) : (
+            <div>
+              <button className="btn btn-primary btn-sm"
+                onClick={() => setPinAction({ kind: 'genLaporanCode', payload: {}, title: 'Kode Setup Grup Laporan' })}>
+                🔑 Generate Kode Setup
+              </button>
+              {laporanCode && (
+                <div style={{ marginTop: 10, padding: 10, background: 'var(--surface2)', borderRadius: 6, fontSize: 12 }}>
+                  <div><b>Kode:</b> <code style={{ fontSize: 14, fontWeight: 700, userSelect: 'all' }}>{laporanCode.kode}</code></div>
+                  <div style={{ marginTop: 6, color: 'var(--text3)' }}>
+                    1. Buat/buka grup Telegram tujuan laporan<br />
+                    2. Invite <b>@sistem_gadai_bot</b>, jadikan admin<br />
+                    3. Kirim di grup: <code>/register-laporan {laporanCode.kode}</code>
+                  </div>
+                  <div style={{ marginTop: 4, color: 'var(--yellow)' }}>
+                    Berlaku sampai {new Date(laporanCode.expiresAt).toLocaleTimeString('id-ID')}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         {loading && (
