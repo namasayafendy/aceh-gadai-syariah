@@ -455,6 +455,18 @@ export default function JatuhTempoPage() {
               Cetak Lewat Waktu ({cntLewat})
             </button>
           )}
+          <button className="btn btn-primary btn-sm" onClick={handlePrintJT}
+            disabled={loading || allRows.length === 0}>
+            🖨️ Cetak PDF ({allRows.length})
+          </button>
+          <button className="btn btn-outline btn-sm" onClick={handleCsvGadai}
+            disabled={loading || gadaiRows.length === 0}>
+            ⬇️ CSV Gadai ({gadaiRows.length})
+          </button>
+          <button className="btn btn-outline btn-sm" onClick={handleCsvSjb}
+            disabled={loading || sjbRows.length === 0}>
+            ⬇️ CSV SJB ({sjbRows.length})
+          </button>
         </div>
 
         {/* Stats */}
