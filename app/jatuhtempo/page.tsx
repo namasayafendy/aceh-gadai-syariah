@@ -368,18 +368,18 @@ export default function JatuhTempoPage() {
   // Outlet label untuk filename/judul PDF. Prefer outlet dari baris data; fallback "Outlet {id}".
   const outletLabel = (gadaiRows[0]?.outlet || sjbRows[0]?.outlet || `Outlet ${outletId}`).trim();
 
-  const handlePrintJT = () => printJatuhTempo(gadaiRows, sjbRows, outletLabel);
+  const handlePrintJT = () => printJatuhTempo(filteredGadai, filteredSjb, outletLabel);
 
   const handleCsvGadai = () => {
-    if (gadaiRows.length === 0) { alert('Tidak ada data gadai untuk di-export.'); return; }
+    if (filteredGadai.length === 0) { alert('Tidak ada data gadai (sesuai filter) untuk di-export.'); return; }
     const fn = `Data Jatuh Tempo Gadai ${outletLabel} Per ${csvStampSuffix()}.csv`;
-    downloadCSV(fn, buildCsvGadai(gadaiRows));
+    downloadCSV(fn, buildCsvGadai(filteredGadai));
   };
 
   const handleCsvSjb = () => {
-    if (sjbRows.length === 0) { alert('Tidak ada data SJB untuk di-export.'); return; }
+    if (filteredSjb.length === 0) { alert('Tidak ada data SJB (sesuai filter) untuk di-export.'); return; }
     const fn = `Data Jatuh Tempo Jualtitip ${outletLabel} Per ${csvStampSuffix()}.csv`;
-    downloadCSV(fn, buildCsvSjb(sjbRows));
+    downloadCSV(fn, buildCsvSjb(filteredSjb));
   };
 
   // Table header style
@@ -456,16 +456,16 @@ export default function JatuhTempoPage() {
             </button>
           )}
           <button className="btn btn-primary btn-sm" onClick={handlePrintJT}
-            disabled={loading || allRows.length === 0}>
-            🖨️ Cetak PDF ({allRows.length})
+            disabled={loading || (filteredGadai.length + filteredSjb.length) === 0}>
+            🖨️ Cetak PDF ({filteredGadai.length + filteredSjb.length})
           </button>
           <button className="btn btn-outline btn-sm" onClick={handleCsvGadai}
-            disabled={loading || gadaiRows.length === 0}>
-            ⬇️ CSV Gadai ({gadaiRows.length})
+            disabled={loading || filteredGadai.length === 0}>
+            ⬇️ CSV Gadai ({filteredGadai.length})
           </button>
           <button className="btn btn-outline btn-sm" onClick={handleCsvSjb}
-            disabled={loading || sjbRows.length === 0}>
-            ⬇️ CSV SJB ({sjbRows.length})
+            disabled={loading || filteredSjb.length === 0}>
+            ⬇️ CSV SJB ({filteredSjb.length})
           </button>
         </div>
 
@@ -549,3 +549,4 @@ export default function JatuhTempoPage() {
     </AppShell>
   );
 }
+    
