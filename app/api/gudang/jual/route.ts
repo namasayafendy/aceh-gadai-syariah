@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
         outlet: outletName,
         alamat:   outlet ? ((outlet as any).alamat ?? '') : '',
         kota:     outlet ? ((outlet as any).kota ?? '') : '',
-        telpon:   outlet ? ((outlet as any).telpon ?? '') : '',
+        telpon:   outlet ? ((outlet as any).telepon ?? (outlet as any).telpon ?? '') : '',
         namaPerusahaan:   outlet ? ((outlet as any).nama_perusahaan ?? 'PT. ACEH GADAI SYARIAH') : 'PT. ACEH GADAI SYARIAH',
       });
     }
@@ -213,7 +213,7 @@ export async function POST(request: NextRequest) {
       outlet: outletName,
       alamat:   (outlet as any).alamat ?? '',
       kota:     (outlet as any).kota ?? '',
-      telpon:   (outlet as any).telpon ?? '',
+      telpon:   (outlet as any).telepon ?? (outlet as any).telpon ?? '',
       namaPerusahaan: (outlet as any).nama_perusahaan ?? 'PT. ACEH GADAI SYARIAH',
     });
 

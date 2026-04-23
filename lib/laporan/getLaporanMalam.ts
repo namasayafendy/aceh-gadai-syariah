@@ -330,7 +330,7 @@ export async function getLaporanMalam(
       nama:              outletName,
       alamat:            (outletRow as any).alamat          ?? '',
       kota:              (outletRow as any).kota             ?? '',
-      telpon:            (outletRow as any).telpon           ?? '',
+      telpon:            (outletRow as any).telepon        ?? (outletRow as any).telpon ?? '',
       namaPerusahaan:    (outletRow as any).nama_perusahaan  ?? 'PT. ACEH GADAI SYARIAH',
       waktuOperasional:  (outletRow as any).waktu_operasional ?? '',
     },

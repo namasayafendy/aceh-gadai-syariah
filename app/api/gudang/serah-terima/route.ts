@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
       outlet: outletName,
       alamat:   (outlet as any).alamat ?? '',
       kota:     (outlet as any).kota ?? '',
-      telpon:   (outlet as any).telpon ?? '',
+      telpon:   (outlet as any).telepon ?? (outlet as any).telpon ?? '',
       namaPerusahaan:   (outlet as any).nama_perusahaan ?? 'PT. ACEH GADAI SYARIAH',
       waktuOperasional: (outlet as any).waktu_operasional ?? '',
       statusKepalaGudang: (outlet as any).status_kepala_gudang ?? '',

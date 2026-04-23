@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
         outlet: outletName,
         alamat:   outlet ? ((outlet as any).alamat ?? '') : '',
         kota:     outlet ? ((outlet as any).kota ?? '') : '',
-        telpon:   outlet ? ((outlet as any).telpon ?? '') : '',
+        telpon:   outlet ? ((outlet as any).telepon ?? (outlet as any).telpon ?? '') : '',
         namaPerusahaan:   outlet ? ((outlet as any).nama_perusahaan ?? 'PT. ACEH GADAI SYARIAH') : 'PT. ACEH GADAI SYARIAH',
         waktuOperasional: outlet ? ((outlet as any).waktu_operasional ?? '') : '',
         statusKepalaGudang: outlet ? ((outlet as any).status_kepala_gudang ?? '') : '',

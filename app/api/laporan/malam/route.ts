@@ -219,7 +219,7 @@ export async function GET(request: NextRequest) {
         nama:              outletName,
         alamat:            outletRow.alamat          ?? '',
         kota:              outletRow.kota             ?? '',
-        telpon:            outletRow.telpon           ?? '',
+        telpon:            outletRow.telepon        ?? outletRow.telpon ?? '',
         namaPerusahaan:    outletRow.nama_perusahaan  ?? 'PT. ACEH GADAI SYARIAH',
         waktuOperasional:  outletRow.waktu_operasional ?? '',
       },

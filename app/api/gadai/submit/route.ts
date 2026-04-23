@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
       outlet:   outletName,
       alamat:   outlet.alamat ?? '',
       kota:     outlet.kota ?? '',
-      telpon:   outlet.telpon ?? '',
+      telpon:   outlet.telepon ?? outlet.telpon ?? '',
       namaPerusahaan:    outlet.nama_perusahaan ?? 'PT. ACEH GADAI SYARIAH',
       waktuOperasional:  outlet.waktu_operasional ?? 'Senin-Minggu & Libur Nasional : 10.00 - 22.00 WIB',
       statusKepalaGudang: outlet.status_kepala_gudang ?? '',
