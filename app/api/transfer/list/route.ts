@@ -29,8 +29,10 @@ export async function GET(request: NextRequest) {
   const to = url.searchParams.get('to');
   const limit = Math.min(Number(url.searchParams.get('limit') ?? 100), 500);
 
-  // Multi-outlet: Owner boleh cross-outlet, non-Owner dikunci ke outlet-nya
-  const outletFilter = p.role === 'OWNER'
+  // Multi-outlet: Owner & cross-outlet (outlet_id=0, Admin Pusat) boleh filter apa saja;
+  // non-cross-outlet dikunci ke outlet-nya.
+  const crossOutlet = p.role === 'OWNER' || Number(p.outlet_id) === 0;
+  const outletFilter = crossOutlet
     ? (qOutlet && qOutlet !== 'ALL' ? parseInt(qOutlet, 10) : null)
     : p.outlet_id;
 

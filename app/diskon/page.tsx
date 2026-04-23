@@ -69,6 +69,7 @@ export default function DiskonRiwayatPage() {
   const { user } = useAuth();
   const outletId = useOutletId();
   const isOwner = user?.role === 'OWNER';
+  const isCrossOutlet = isOwner || Number(user?.outlet_id ?? 0) === 0;
 
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
@@ -81,14 +82,14 @@ export default function DiskonRiwayatPage() {
 
   // Owner: load outlet list untuk dropdown
   useEffect(() => {
-    if (!isOwner) return;
+    if (!isCrossOutlet) return;
     (async () => {
       try {
         const r = await fetch('/api/outlet').then(x => x.json());
         if (r.ok) setOutlets(r.rows.map((x: any) => ({ id: x.id, nama: x.nama })));
       } catch { /* silent */ }
     })();
-  }, [isOwner]);
+  }, [isCrossOutlet]);
 
   const load = useCallback(async () => {
     setLoading(true); setErr('');
@@ -133,7 +134,7 @@ export default function DiskonRiwayatPage() {
       <div style={{ padding: 16, overflowY: 'auto', height: '100%' }}>
         {/* Filter bar */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 12, padding: 10, background: 'var(--surface2)', borderRadius: 6 }}>
-          {isOwner && (
+          {isCrossOutlet && (
             <div>
               <label style={{ fontSize: 10, display: 'block' }}>Outlet</label>
               <select value={filterOutlet} onChange={e => setFilterOutlet(e.target.value)}
@@ -182,7 +183,7 @@ export default function DiskonRiwayatPage() {
             <thead><tr>
               <th>ID Diskon</th>
               <th>Tgl</th>
-              {isOwner && <th>Outlet</th>}
+              {isCrossOutlet && <th>Outlet</th>}
               <th>Jenis</th>
               <th>No Faktur</th>
               <th>Nasabah</th>
@@ -197,7 +198,7 @@ export default function DiskonRiwayatPage() {
             </tr></thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={isOwner ? 14 : 13} className="empty-state">
+                <tr><td colSpan={isCrossOutlet ? 14 : 13} className="empty-state">
                   {loading ? '⏳ Memuat...' : 'Belum ada request diskon di rentang ini.'}
                 </td></tr>
               ) : rows.map(r => {
@@ -207,7 +208,7 @@ export default function DiskonRiwayatPage() {
                   <tr key={r.id_diskon}>
                     <td style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{r.id_diskon}</td>
                     <td style={{ fontSize: 11 }}>{r.tgl ? new Date(r.tgl).toLocaleString('id-ID') : '—'}</td>
-                    {isOwner && <td style={{ fontSize: 11 }}>{r.outlet ?? outletNama(r.outlet_id)}</td>}
+                    {isCrossOutlet && <td style={{ fontSize: 11 }}>{r.outlet ?? outletNama(r.outlet_id)}</td>}
                     <td style={{ fontSize: 11 }}>
                       <span className="badge">{r.status_tebus ?? '—'}</span>
                     </td>

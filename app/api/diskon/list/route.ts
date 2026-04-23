@@ -34,8 +34,9 @@ export async function GET(request: NextRequest) {
   const to      = url.searchParams.get('to');
   const limit   = Math.min(Number(url.searchParams.get('limit') ?? 300), 1000);
 
-  // Multi-outlet: Owner bebas, non-Owner dikunci.
-  const outletFilter = p.role === 'OWNER'
+  // Multi-outlet: Owner & cross-outlet (outlet_id=0, Admin Pusat) bebas; non-cross-outlet dikunci.
+  const crossOutlet = p.role === 'OWNER' || Number(p.outlet_id) === 0;
+  const outletFilter = crossOutlet
     ? (qOutlet && qOutlet !== 'ALL' ? parseInt(qOutlet, 10) : null)
     : p.outlet_id;
 
