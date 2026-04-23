@@ -9,7 +9,8 @@
 //
 // Guard:
 // - Harus login
-// - Non-OWNER: outlet_id harus match outlet kasir
+// - Non-OWNER & non-cross-outlet (outlet_id=0 = Admin Pusat):
+//   outlet_id row harus match outlet kasir
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -41,8 +42,9 @@ export async function GET(request: NextRequest) {
 
   const row = data as any;
 
-  // Non-OWNER: scope ke outlet sendiri
-  if (p.role !== 'OWNER' && Number(row.outlet_id ?? 0) !== Number(p.outlet_id)) {
+  // Non-OWNER & bukan cross-outlet (outlet_id=0 = ADMIN Pusat): scope ke outlet sendiri
+  const crossOutlet = p.role === 'OWNER' || Number(p.outlet_id) === 0;
+  if (!crossOutlet && Number(row.outlet_id ?? 0) !== Number(p.outlet_id)) {
     return NextResponse.json({ ok: false, msg: 'Forbidden.' }, { status: 403 });
   }
 

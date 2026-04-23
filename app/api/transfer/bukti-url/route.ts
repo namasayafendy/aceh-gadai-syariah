@@ -32,8 +32,9 @@ export async function GET(request: NextRequest) {
   const r = row as any;
   if (!r.bukti_storage_path) return NextResponse.json({ ok: false, msg: 'Bukti belum diupload.' });
 
-  // Multi-outlet safety: non-Owner hanya boleh lihat bukti outletnya
-  if (p.role !== 'OWNER' && r.outlet_id !== p.outlet_id) {
+  // Multi-outlet safety: non-Owner & bukan cross-outlet (outlet_id=0 = Admin Pusat) scope ke outlet sendiri
+  const crossOutlet = p.role === 'OWNER' || Number(p.outlet_id) === 0;
+  if (!crossOutlet && r.outlet_id !== p.outlet_id) {
     return NextResponse.json({ ok: false, msg: 'Akses ditolak.' }, { status: 403 });
   }
 
