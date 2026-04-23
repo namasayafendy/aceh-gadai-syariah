@@ -13,6 +13,8 @@
 //   2. Render cetak di browser (dikirim ke client sebagai string)
 // ============================================================
 
+import { LOGO_AG_DATA_URI } from '@/lib/assets/logo-ag';
+
 // ─── Format helpers ───────────────────────────────────────────
 const fmtRp = (v: number | string): string =>
   'Rp\u00a0' + (parseFloat(String(v ?? 0)) || 0).toLocaleString('id-ID');
@@ -87,7 +89,7 @@ export function buildGadaiHtml(r: GadaiData): string {
       ? `<div style="margin-top:4px;font-size:26px;font-weight:900;letter-spacing:3px;color:#000;text-align:center;border:2px solid #000;padding:3px 8px;display:inline-block">${r.locationGudang}</div>`
       : '';
     return `<div style="display:flex;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:8px">`
-      + `<div style="width:60px;min-width:60px;text-align:center"><div style="border:1px solid #000;width:50px;height:50px;margin:auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold;color:#333">AG</div></div>`
+      + `<div style="width:60px;min-width:60px;text-align:center"><img src="${LOGO_AG_DATA_URI}" alt="AG" style="width:50px;height:50px;object-fit:contain" /></div>`
       + `<div style="flex:1;text-align:center">`
       + `<div style="font-size:13px;font-weight:bold">${judul}</div>`
       + `<div style="font-size:12px;font-weight:bold">${r.namaPerusahaan || 'ACEH GADAI SYARIAH'}</div>`

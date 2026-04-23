@@ -26,6 +26,10 @@ function openPrintWindow(html: string) {
   setTimeout(() => win.print(), 600);
 }
 
+// Logo AG dari /public/logo-ag.png (dipakai di semua header cetakan kontrak/nota)
+const LOGO_COL = `<div style="width:60px;min-width:60px;text-align:center"><img src="/logo-ag.png" alt="AG" style="width:50px;height:50px;object-fit:contain" /></div>`;
+const LOGO_COL_CENTER = `<div style="width:60px;min-width:60px;display:flex;align-items:center;justify-content:center"><img src="/logo-ag.png" alt="AG" style="width:55px;height:55px;object-fit:contain" /></div>`;
+
 const BASE_CSS = `*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,sans-serif;background:#ccc;padding:10px}.noprint{margin-bottom:10px;background:#fff;padding:8px;border-radius:4px}.page{background:#fff;width:210mm;min-height:297mm;padding:12mm 15mm;margin:0 auto 10px;page-break-after:always}.page:last-child{page-break-after:avoid}.page-half{background:#fff;width:210mm;min-height:148mm;padding:15mm;margin:0 auto 10px;page-break-after:always}.page-half:last-child{page-break-after:avoid}p{margin-bottom:3px}@media print{@page{margin:0;size:A4}body{background:#fff;padding:0}.noprint{display:none}.page,.page-half{margin:0;padding:12mm 15mm;min-height:auto;width:auto;page-break-after:always}.page:last-child,.page-half:last-child{page-break-after:avoid}}`;
 
 // ── SHARED ADDENDUM TEXTS ─────────────────────────────────────
@@ -85,7 +89,7 @@ export function buildGadaiPages(r: GadaiPrintData, bcIdPrefix = 'bc'): { html: s
     const rak = isBcB && r.locationGudang && r.locationGudang !== '\u2014'
       ? `<div style="margin-top:4px;font-size:26px;font-weight:900;letter-spacing:3px;border:2px solid #000;padding:3px 8px;display:inline-block">${r.locationGudang}</div>` : '';
     return `<div style="display:flex;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:8px">`
-      +`<div style="width:60px;min-width:60px;text-align:center"><div style="border:1px solid #000;width:50px;height:50px;margin:auto;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:bold">AG</div></div>`
+      +LOGO_COL
       +`<div style="flex:1;text-align:center"><div style="font-size:13px;font-weight:bold">${judul}</div><div style="font-size:12px;font-weight:bold">${r.namaPerusahaan||'ACEH GADAI SYARIAH'}</div><div style="font-size:9px">Alamat: ${r.alamat||''} | Telp/WA: ${r.telpon||''}</div><div style="font-size:9px">Waktu Operasional Kerja: ${r.waktuOperasional||''}</div></div>`
       +`<div style="text-align:right;min-width:130px"><svg id="${bcId}" style="height:40px"></svg><div style="font-size:9px">${barcode}</div>${rak}</div></div>`
       +`<div style="display:flex;justify-content:flex-end;font-size:10px;margin-bottom:6px"><span style="border:1px solid #000;padding:2px 8px"><b>No. SBR :</b>&nbsp;&nbsp;${r.noFaktur}</span></div>`;
@@ -175,7 +179,7 @@ export function printTebus(r: TebusPrintData) {
   const alamatLine = (r.alamat||'') + '. Telepon/Wa: ' + (r.telpon||'');
 
   function notaInner(lembar: string) {
-    return `<div style="padding:8mm 0"><div style="text-align:center;margin-bottom:10px;border-bottom:2px solid #000;padding-bottom:8px"><div style="font-size:14px;font-weight:bold">NOTA PENEBUSAN BARANG</div><div style="font-size:13px;font-weight:bold">${r.namaPerusahaan||'ACEH GADAI SYARIAH'}</div><div style="font-size:9px">Alamat: ${alamatLine}</div></div>`
+    return `<div style="padding:8mm 0"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;border-bottom:2px solid #000;padding-bottom:8px">${LOGO_COL}<div style="flex:1;text-align:center"><div style="font-size:14px;font-weight:bold">NOTA PENEBUSAN BARANG</div><div style="font-size:13px;font-weight:bold">${r.namaPerusahaan||'ACEH GADAI SYARIAH'}</div><div style="font-size:9px">Alamat: ${alamatLine}</div></div><div style="width:60px"></div></div>`
       +`<table style="width:100%;font-size:10px;border-collapse:collapse;margin-bottom:12px"><tbody>`
       +`<tr><td style="padding:3px 6px;width:45%">No Pelunasan</td><td style="padding:3px 6px">: <b>${r.idTebus||''}</b></td></tr>`
       +`<tr><td style="padding:3px 6px">No Faktur (SBR)</td><td style="padding:3px 6px">: ${r.noFaktur||''}</td></tr>`
@@ -324,7 +328,7 @@ export function printSJB(r: SJBPrintData) {
     const rakLabel = isPerusahaan && r.locationGudang && r.locationGudang !== '\u2014'
       ? `<div style="margin-top:5px;font-size:30px;font-weight:900;letter-spacing:4px;border:3px solid #000;padding:4px 12px;display:inline-block">${r.locationGudang}</div>` : '';
     return `<div style="display:flex;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:10px">`
-      +`<div style="width:62px;min-width:62px;text-align:center"><div style="border:2px solid #000;width:54px;height:54px;margin:auto;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;line-height:1">AG<br><span style="font-size:8px">SYARIAH</span></div></div>`
+      +`<div style="width:62px;min-width:62px;text-align:center"><img src="/logo-ag.png" alt="AG" style="width:54px;height:54px;object-fit:contain" /></div>`
       +`<div style="flex:1;text-align:center;padding:0 8px">`
       +`<div style="font-size:14px;font-weight:900;letter-spacing:.5px">SURAT PERJANJIAN JUAL DAN BELI KEMBALI</div>`
       +`<div style="font-size:13px;font-weight:800">${namaPerusahaan}</div>`
@@ -413,7 +417,7 @@ export function printSJBTebus(r: SJBTebusPrintData) {
   const namaDisplay = r.nama || r.namaNasabah || '';
 
   function nota(lembar: string) {
-    return `<div style="padding:8mm 0"><div style="text-align:center;margin-bottom:10px;border-bottom:2px solid #000;padding-bottom:8px"><div style="font-size:14px;font-weight:bold">NOTA BELI KEMBALI (BUYBACK)</div><div style="font-size:13px;font-weight:bold">${r.namaPerusahaan||'ACEH GADAI SYARIAH'}</div><div style="font-size:9px">Alamat: ${alamatLine}</div></div>`
+    return `<div style="padding:8mm 0"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;border-bottom:2px solid #000;padding-bottom:8px">${LOGO_COL}<div style="flex:1;text-align:center"><div style="font-size:14px;font-weight:bold">NOTA BELI KEMBALI (BUYBACK)</div><div style="font-size:13px;font-weight:bold">${r.namaPerusahaan||'ACEH GADAI SYARIAH'}</div><div style="font-size:9px">Alamat: ${alamatLine}</div></div><div style="width:60px"></div></div>`
       +`<table style="width:100%;font-size:10px;border-collapse:collapse;margin-bottom:12px"><tbody>`
       +`<tr><td style="padding:3px 6px;width:45%">No Transaksi</td><td style="padding:3px 6px">: <b>${r.idBB||r.idTebus||''}</b></td></tr>`
       +`<tr><td style="padding:3px 6px">No SJB</td><td style="padding:3px 6px">: ${r.noSJB||r.noFaktur||''}</td></tr>`
@@ -495,12 +499,12 @@ export function printSJBTebus(r: SJBTebusPrintData) {
       const bcId = 'sjbk_bc_' + _bcMap.length;
       _bcMap.push({ id: bcId, val: bcVal });
       return `<div class="page">
-        <div style="text-align:center;margin-bottom:12px;border-bottom:2px solid #000;padding-bottom:8px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;border-bottom:2px solid #000;padding-bottom:8px">${LOGO_COL}<div style="flex:1;text-align:center">
           <div style="font-size:15px;font-weight:bold">${namaP}</div>
           <div style="font-size:9px">${r.alamat||''}</div>
           <div style="font-size:11px;font-weight:bold;margin-top:6px">SURAT PERJANJIAN JUAL DAN BELI KEMBALI</div>
           <div style="font-size:10px;margin-top:2px">No: ${r.noSJB||r.noFaktur||''}</div>
-        </div>
+        </div><div style="width:60px"></div></div>
         <table style="width:100%;font-size:10px;border-collapse:collapse;margin-bottom:10px"><tbody>
           <tr><td style="padding:2px 6px;width:140px">Tanggal Akad</td><td style="padding:2px 6px">: ${tglFmt}</td></tr>
           <tr><td style="padding:2px 6px">Jatuh Tempo</td><td style="padding:2px 6px;font-weight:bold;color:#d97706">: ${tglJTFmt}</td></tr>
@@ -794,7 +798,7 @@ export function printBAST(r: BASTPrintData) {
 
     return `<div class="page">`
       + `<div style="display:flex;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:10px">`
-      + `<div style="width:60px;min-width:60px;text-align:center"><div style="border:1px solid #000;width:50px;height:50px;margin:auto;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold">AG</div></div>`
+      + LOGO_COL
       + `<div style="flex:1;text-align:center"><div style="font-size:13px;font-weight:bold">BERITA ACARA SERAH TERIMA BARANG</div><div style="font-size:12px;font-weight:bold">${r.namaPerusahaan || 'ACEH GADAI SYARIAH'}</div><div style="font-size:9px">Alamat: ${alamatLine}</div></div>`
       + `<div style="text-align:right;min-width:150px;font-size:10px"><div style="border:1px solid #000;padding:3px 8px;font-family:monospace;font-weight:bold">No. BA: ${r.noBA}</div><div style="font-size:9px;margin-top:4px">${tglHdr}</div></div>`
       + `</div>`
@@ -890,7 +894,7 @@ export function printJualBon(r: JualBonPrintData) {
 
     return `<div class="page">`
       + `<div style="display:flex;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:10px">`
-      + `<div style="width:60px;min-width:60px;text-align:center"><div style="border:1px solid #000;width:50px;height:50px;margin:auto;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold">AG</div></div>`
+      + LOGO_COL
       + `<div style="flex:1;text-align:center"><div style="font-size:13px;font-weight:bold">LAPORAN PENJUALAN BARANG SITA</div><div style="font-size:12px;font-weight:bold">${r.namaPerusahaan || 'ACEH GADAI SYARIAH'}</div><div style="font-size:9px">Alamat: ${alamatLine}</div></div>`
       + `<div style="text-align:right;min-width:150px;font-size:10px"><div style="border:1px solid #000;padding:3px 8px;font-family:monospace;font-weight:bold">No. Bon: ${r.noBon}</div><div style="font-size:9px;margin-top:4px">${tglHdr}</div></div>`
       + `</div>`
