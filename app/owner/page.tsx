@@ -85,55 +85,165 @@ export default function OwnerPage() {
 // ═══════════════════════════════════════════════════════════
 // TAB: RINGKASAN
 // ═══════════════════════════════════════════════════════════
-function RingkasanTab() {
-  const [summary, setSummary] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+// Helper: tanggal 1 bulan ini (WIB) & hari ini
+function firstOfMonthIsoOwner() {
+  const d = new Date(); d.setDate(1);
+  return d.toISOString().slice(0, 10);
+}
+function todayIsoOwner() {
+  return new Date().toISOString().slice(0, 10);
+}
 
+function RingkasanTab() {
+  // State: summary (aset saat ini) + laporan rentang
+  const [summary, setSummary] = useState<any[]>([]);
+  const [laporan, setLaporan] = useState<any[]>([]);
+  const [loadingSum, setLoadingSum] = useState(false);
+  const [loadingLap, setLoadingLap] = useState(false);
+
+  // Date range — default bulan berjalan
+  const [from, setFrom] = useState(firstOfMonthIsoOwner());
+  const [to, setTo]     = useState(todayIsoOwner());
+
+  // Load asset summary (once)
   useEffect(() => {
     (async () => {
-      setLoading(true);
+      setLoadingSum(true);
       try {
         const res = await fetch('/api/owner?action=summary');
         const json = await res.json();
         if (json.ok) setSummary(json.summary || []);
       } catch {}
-      setLoading(false);
+      setLoadingSum(false);
     })();
   }, []);
 
-  const totalGadaiAktif = summary.reduce((s, r) => s + r.gadaiAktif, 0);
-  const totalGadai = summary.reduce((s, r) => s + r.gadaiTotal, 0);
-  const totalTebus = summary.reduce((s, r) => s + r.tebusTotal, 0);
-  const totalSjb = summary.reduce((s, r) => s + r.sjbAktif, 0);
+  // Load laporan rentang
+  const loadLaporan = useCallback(async () => {
+    setLoadingLap(true);
+    try {
+      const res = await fetch(`/api/owner?action=laporan-rentang&from=${from}&to=${to}`);
+      const json = await res.json();
+      if (json.ok) setLaporan(json.rows || []);
+    } catch {}
+    setLoadingLap(false);
+  }, [from, to]);
+
+  useEffect(() => { loadLaporan(); }, [loadLaporan]);
+
+  // Totals — Laporan rentang
+  const tPinjaman = laporan.reduce((s, r) => s + Number(r.pinjamanKeluar || 0), 0);
+  const tMasuk    = laporan.reduce((s, r) => s + Number(r.tebusMasuk || 0), 0);
+  const tLaba     = laporan.reduce((s, r) => s + Number(r.laba || 0), 0);
+
+  // Totals — Aset saat ini
+  const tGadaiCnt = summary.reduce((s, r) => s + Number(r.gadaiAktif || 0), 0);
+  const tGadaiRp  = summary.reduce((s, r) => s + Number(r.gadaiAktifNominal || 0), 0);
+  const tSjbCnt   = summary.reduce((s, r) => s + Number(r.sjbAktif || 0), 0);
+  const tSjbRp    = summary.reduce((s, r) => s + Number(r.sjbAktifNominal || 0), 0);
 
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
-      <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>📊 Ringkasan Semua Outlet</div>
-
-      {/* Total cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
-        <div className="stat-card blue"><div className="s-lbl">Gadai Aktif</div><div className="s-val">{loading ? '—' : totalGadaiAktif}</div><div className="s-sub">Semua outlet</div></div>
-        <div className="stat-card gold"><div className="s-lbl">Total Gadai</div><div className="s-val">{loading ? '—' : totalGadai}</div><div className="s-sub">Sepanjang waktu</div></div>
-        <div className="stat-card green"><div className="s-lbl">Total Tebus</div><div className="s-val">{loading ? '—' : totalTebus}</div><div className="s-sub">Semua jenis</div></div>
-        <div className="stat-card"><div className="s-lbl">SJB Aktif</div><div className="s-val">{loading ? '—' : totalSjb}</div></div>
+      {/* ═══ LAPORAN RENTANG TANGGAL ═══ */}
+      <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>📊 Laporan Total Semua Outlet</div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', marginBottom: 14, padding: 10, background: 'var(--surface2)', borderRadius: 6 }}>
+        <div>
+          <label style={{ fontSize: 10, display: 'block' }}>Dari</label>
+          <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={{ fontSize: 12, padding: '6px 10px' }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 10, display: 'block' }}>Sampai</label>
+          <input type="date" value={to} onChange={e => setTo(e.target.value)} style={{ fontSize: 12, padding: '6px 10px' }} />
+        </div>
+        <button className="btn btn-primary btn-sm" onClick={loadLaporan} disabled={loadingLap}>
+          {loadingLap ? '⏳' : '🔄 Refresh'}
+        </button>
       </div>
 
-      {/* Per-outlet table */}
-      <div className="section-title">Perbandingan Antar Outlet</div>
+      <div className="tbl-wrap" style={{ marginBottom: 24 }}>
+        <table>
+          <thead><tr>
+            <th>Outlet</th>
+            <th className="num">Pinjaman Keluar<br/><span style={{ fontSize: 9, color: 'var(--text3)' }}>(Gadai + SJB)</span></th>
+            <th className="num">Tebus Masuk<br/><span style={{ fontSize: 9, color: 'var(--text3)' }}>(Tebus+Buyback+Perpanjang)</span></th>
+            <th className="num">Laba</th>
+          </tr></thead>
+          <tbody>
+            {loadingLap ? <tr><td colSpan={4} className="empty-state">⏳ Memuat...</td></tr>
+              : laporan.length === 0 ? <tr><td colSpan={4} className="empty-state">Tidak ada data</td></tr>
+              : laporan.map((r, i) => (
+                <tr key={i}>
+                  <td style={{ fontWeight: 600 }}>{r.outlet}</td>
+                  <td className="num" style={{ color: 'var(--red)' }}>{formatRp(Number(r.pinjamanKeluar || 0))}</td>
+                  <td className="num" style={{ color: 'var(--accent)' }}>{formatRp(Number(r.tebusMasuk || 0))}</td>
+                  <td className="num" style={{ color: 'var(--green)', fontWeight: 700 }}>{formatRp(Number(r.laba || 0))}</td>
+                </tr>
+              ))}
+            {!loadingLap && laporan.length > 0 && (
+              <tr style={{ background: 'var(--surface2)', fontWeight: 700, borderTop: '2px solid var(--border)' }}>
+                <td>TOTAL</td>
+                <td className="num" style={{ color: 'var(--red)' }}>{formatRp(tPinjaman)}</td>
+                <td className="num" style={{ color: 'var(--accent)' }}>{formatRp(tMasuk)}</td>
+                <td className="num" style={{ color: 'var(--green)' }}>{formatRp(tLaba)}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ═══ TOTAL ASET SAAT INI ═══ */}
+      <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>📦 Total Aset Saat Ini</div>
+      <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 10 }}>
+        Kontrak aktif (gadai + SJB) yang masih di gudang per outlet.
+      </div>
       <div className="tbl-wrap">
         <table>
-          <thead><tr><th>Outlet</th><th className="num">Gadai Aktif</th><th className="num">Total Gadai</th><th className="num">SJB Aktif</th><th className="num">Total Tebus</th></tr></thead>
+          <thead><tr>
+            <th>Outlet</th>
+            <th className="num">Gadai Aktif<br/><span style={{ fontSize: 9, color: 'var(--text3)' }}>(jml / nominal)</span></th>
+            <th className="num">SJB Aktif<br/><span style={{ fontSize: 9, color: 'var(--text3)' }}>(jml / nominal)</span></th>
+            <th className="num">Stok di Gudang<br/><span style={{ fontSize: 9, color: 'var(--text3)' }}>(Gadai + SJB)</span></th>
+          </tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={5} className="empty-state">⏳ Memuat...</td></tr>
-            : summary.map((r, i) => (
-              <tr key={i}>
-                <td style={{ fontWeight: 600 }}>{r.outlet}</td>
-                <td className="num" style={{ color: 'var(--accent)', fontWeight: 700 }}>{r.gadaiAktif}</td>
-                <td className="num">{r.gadaiTotal}</td>
-                <td className="num">{r.sjbAktif}</td>
-                <td className="num">{r.tebusTotal}</td>
+            {loadingSum ? <tr><td colSpan={4} className="empty-state">⏳ Memuat...</td></tr>
+              : summary.map((r, i) => {
+                const stokCnt = Number(r.gadaiAktif || 0) + Number(r.sjbAktif || 0);
+                const stokRp  = Number(r.gadaiAktifNominal || 0) + Number(r.sjbAktifNominal || 0);
+                return (
+                  <tr key={i}>
+                    <td style={{ fontWeight: 600 }}>{r.outlet}</td>
+                    <td className="num">
+                      <div style={{ color: 'var(--accent)', fontWeight: 700 }}>{r.gadaiAktif}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{formatRp(Number(r.gadaiAktifNominal || 0))}</div>
+                    </td>
+                    <td className="num">
+                      <div style={{ color: 'var(--warn)', fontWeight: 700 }}>{r.sjbAktif}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{formatRp(Number(r.sjbAktifNominal || 0))}</div>
+                    </td>
+                    <td className="num">
+                      <div style={{ color: 'var(--green)', fontWeight: 700 }}>{stokCnt}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{formatRp(stokRp)}</div>
+                    </td>
+                  </tr>
+                );
+              })}
+            {!loadingSum && summary.length > 0 && (
+              <tr style={{ background: 'var(--surface2)', fontWeight: 700, borderTop: '2px solid var(--border)' }}>
+                <td>TOTAL</td>
+                <td className="num">
+                  <div style={{ color: 'var(--accent)' }}>{tGadaiCnt}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text3)' }}>{formatRp(tGadaiRp)}</div>
+                </td>
+                <td className="num">
+                  <div style={{ color: 'var(--warn)' }}>{tSjbCnt}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text3)' }}>{formatRp(tSjbRp)}</div>
+                </td>
+                <td className="num">
+                  <div style={{ color: 'var(--green)' }}>{tGadaiCnt + tSjbCnt}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text3)' }}>{formatRp(tGadaiRp + tSjbRp)}</div>
+                </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>

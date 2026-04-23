@@ -16,21 +16,113 @@ export async function GET(request: NextRequest) {
     const action = searchParams.get('action') ?? 'summary';
 
     if (action === 'summary') {
+      // Ringkasan aset saat ini per outlet: gadai aktif + SJB aktif (count + nominal)
       const { data: outlets } = await db.from('outlets').select('id, nama').order('id');
       const summary: any[] = [];
       for (const o of (outlets ?? [])) {
         const outletName = (o as any).nama;
-        const { count: gadaiAktif } = await db.from('tb_gadai').select('*', { count: 'exact', head: true }).eq('outlet', outletName).eq('status', 'AKTIF');
-        const { count: gadaiTotal } = await db.from('tb_gadai').select('*', { count: 'exact', head: true }).eq('outlet', outletName);
-        const { count: sjbAktif } = await db.from('tb_sjb').select('*', { count: 'exact', head: true }).eq('outlet', outletName).in('status', ['AKTIF', 'BERJALAN']);
-        const { count: tebusTotal } = await db.from('tb_tebus').select('*', { count: 'exact', head: true }).eq('outlet', outletName);
+
+        // Count + sum nominal gadai AKTIF
+        const { count: gadaiAktif } = await db.from('tb_gadai')
+          .select('*', { count: 'exact', head: true })
+          .eq('outlet', outletName).eq('status', 'AKTIF');
+        const { data: gadaiAktifRows } = await db.from('tb_gadai')
+          .select('jumlah_gadai').eq('outlet', outletName).eq('status', 'AKTIF');
+        const gadaiAktifNominal = (gadaiAktifRows ?? [])
+          .reduce((s: number, r: any) => s + Number(r.jumlah_gadai || 0), 0);
+
+        // Count + sum nominal SJB AKTIF/BERJALAN
+        const { count: sjbAktif } = await db.from('tb_sjb')
+          .select('*', { count: 'exact', head: true })
+          .eq('outlet', outletName).in('status', ['AKTIF', 'BERJALAN']);
+        const { data: sjbAktifRows } = await db.from('tb_sjb')
+          .select('harga_jual').eq('outlet', outletName).in('status', ['AKTIF', 'BERJALAN']);
+        const sjbAktifNominal = (sjbAktifRows ?? [])
+          .reduce((s: number, r: any) => s + Number(r.harga_jual || 0), 0);
+
         summary.push({
           outletId: (o as any).id, outlet: outletName,
-          gadaiAktif: gadaiAktif ?? 0, gadaiTotal: gadaiTotal ?? 0,
-          sjbAktif: sjbAktif ?? 0, tebusTotal: tebusTotal ?? 0,
+          gadaiAktif: gadaiAktif ?? 0, gadaiAktifNominal,
+          sjbAktif:   sjbAktif   ?? 0, sjbAktifNominal,
         });
       }
       return NextResponse.json({ ok: true, summary, outlets });
+    }
+
+    // Laporan rentang tanggal — per outlet + grand total
+    // Input: ?from=YYYY-MM-DD&to=YYYY-MM-DD (inclusive, WIB)
+    // Output per outlet: pinjamanKeluar (gadai+sjb), tebusMasuk (tebus+buyback+perpanjang), laba
+    if (action === 'laporan-rentang') {
+      const from = searchParams.get('from');
+      const to   = searchParams.get('to');
+      if (!from || !to) {
+        return NextResponse.json({ ok: false, msg: 'Parameter from & to wajib (YYYY-MM-DD).' });
+      }
+      const startIso = from + 'T00:00:00+07:00';
+      const endIso   = to   + 'T23:59:59+07:00';
+
+      const { data: outlets } = await db.from('outlets').select('id, nama').order('id');
+      const rows: any[] = [];
+      for (const o of (outlets ?? [])) {
+        const outletName = (o as any).nama;
+
+        // Pinjaman keluar: akad gadai baru
+        const { data: gadaiNew } = await db.from('tb_gadai')
+          .select('jumlah_gadai').eq('outlet', outletName)
+          .neq('status', 'BATAL')
+          .gte('tgl_gadai', startIso).lte('tgl_gadai', endIso);
+        const pinjamanGadai = (gadaiNew ?? [])
+          .reduce((s: number, r: any) => s + Number(r.jumlah_gadai || 0), 0);
+
+        // Pinjaman keluar: akad SJB baru (harga_jual = yg keluar ke nasabah)
+        const { data: sjbNew } = await db.from('tb_sjb')
+          .select('harga_jual').eq('outlet', outletName)
+          .neq('status', 'BATAL')
+          .gte('tgl_gadai', startIso).lte('tgl_gadai', endIso);
+        const pinjamanSjb = (sjbNew ?? [])
+          .reduce((s: number, r: any) => s + Number(r.harga_jual || 0), 0);
+
+        // Tebus / Perpanjang (gadai)
+        const { data: tebusRows } = await db.from('tb_tebus')
+          .select('status, jumlah_bayar, jumlah_gadai, jumlah_gadai_baru, ujrah_berjalan')
+          .eq('outlet', outletName)
+          .in('status', ['TEBUS', 'PERPANJANG'])
+          .gte('tgl', startIso).lte('tgl', endIso);
+
+        // Buyback / Perpanjang (SJB)
+        const { data: buybackRows } = await db.from('tb_buyback')
+          .select('status, jumlah_bayar, harga_jual, harga_jual_baru, ujrah_berjalan')
+          .eq('outlet', outletName)
+          .in('status', ['BUYBACK', 'PERPANJANG'])
+          .gte('tgl', startIso).lte('tgl', endIso);
+
+        let tebusMasuk = 0, laba = 0;
+        (tebusRows ?? []).forEach((r: any) => {
+          const bayar = Number(r.jumlah_bayar || 0);
+          const pinja = Number(r.jumlah_gadai || 0);
+          tebusMasuk += bayar;
+          // TEBUS: laba = bayar - pinja ; PERPANJANG: laba = bayar
+          laba += (r.status === 'PERPANJANG') ? bayar : (bayar - pinja);
+        });
+        (buybackRows ?? []).forEach((r: any) => {
+          const bayar = Number(r.jumlah_bayar || 0);
+          const hjual = Number(r.harga_jual || 0);
+          tebusMasuk += bayar;
+          // BUYBACK: laba = bayar - harga_jual ; PERPANJANG: laba = bayar
+          laba += (r.status === 'PERPANJANG') ? bayar : (bayar - hjual);
+        });
+
+        rows.push({
+          outletId: (o as any).id,
+          outlet: outletName,
+          pinjamanKeluar: pinjamanGadai + pinjamanSjb,
+          pinjamanGadai,
+          pinjamanSjb,
+          tebusMasuk,
+          laba,
+        });
+      }
+      return NextResponse.json({ ok: true, rows, from, to });
     }
 
     if (action === 'karyawan') {
