@@ -106,7 +106,16 @@ async function runJob(db: any) {
         error: sendRes.ok ? null : sendRes.error,
       }).then(() => {}, () => {});
     } catch (err) {
-      results[outletNama] = { ok: false, error: String(err) };
+      const errMsg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
+      console.error(`[laporan/nightly-send] outlet=${outletNama} ERROR:`, errMsg);
+      results[outletNama] = { ok: false, error: errMsg };
+      // Log error ke telegram_log supaya bisa di-query dari DB untuk debug
+      db.from('telegram_log').insert({
+        arah: 'OUT', chat_id: chatId,
+        event: 'laporan_malam_pdf',
+        payload: { outlet: outletNama, outletId, tgl, stage: 'preflight' },
+        error: errMsg.substring(0, 2000),
+      }).then(() => {}, () => {});
     }
   }
 
