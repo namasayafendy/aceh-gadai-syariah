@@ -21,7 +21,14 @@
 // Halaman /laporan & tombol cetak di browser TIDAK terpengaruh.
 // ============================================================
 
-import PDFDocument from 'pdfkit';
+// pdfkit default build (pdfkit/js/pdfkit.js) butuh file .afm di node_modules/pdfkit/js/data/
+// pada runtime. Turbopack di Vercel TIDAK bundle file .afm tsb -> ENOENT di serverless.
+// Pakai build 'standalone' yg embed semua font Helvetica/Courier/Times inline.
+// Types tetap di-import dari 'pdfkit' supaya PDFKit.PDFDocument tetap tersedia.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type _PDFDocumentType from 'pdfkit';
+// @ts-ignore — pdfkit.standalone tidak punya types sendiri
+import PDFDocument from 'pdfkit/js/pdfkit.standalone';
 import type { LaporanMalamResult, LaporanExtras } from './getLaporanMalam';
 import { hitungLaba } from './getLaporanMalam';
 
