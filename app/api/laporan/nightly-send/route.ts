@@ -20,6 +20,9 @@ import { getLaporanMalam, computeLaporanExtras } from '@/lib/laporan/getLaporanM
 import { buildLaporanMalamPdf } from '@/lib/laporan/buildLaporanPdf';
 import { sendTelegramDocument } from '@/lib/telegram';
 
+// Pastikan cron dapat waktu cukup — pdfkit + upload ke Telegram per outlet bisa > 10s (default Hobby)
+export const maxDuration = 300;
+
 // Hitung tanggal kemarin di timezone Asia/Jakarta
 function yesterdayJakarta(): string {
   // Kemarin = sekarang - 24 jam, tapi kita render di TZ Jakarta
