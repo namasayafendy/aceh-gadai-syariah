@@ -86,7 +86,10 @@ export default function LaporanPage() {
   const buybackMasuk = buybackList.filter(r => (r.status || '').toUpperCase() === 'BUYBACK').reduce((s: number, r: any) => s + Number(r.jumlah_bayar || 0), 0);
   const buybackCount = buybackList.filter(r => (r.status || '').toUpperCase() === 'BUYBACK').length;
   const jualMasuk = jualSitaList.filter(r => (r.status || '').toUpperCase() === 'JUAL').reduce((s: number, r: any) => s + Number(r.jumlah_bayar || 0), 0);
-  const totalMasukAll = (rk.tebusMasuk || 0) + (rk.perpanjangMasuk || 0) + buybackMasuk + jualMasuk;
+  const sitaMasuk = jualSitaList.filter(r => (r.status || '').toUpperCase() === 'SITA').reduce((s: number, r: any) => s + Number(r.jumlah_bayar || 0), 0);
+  const jualCount = jualSitaList.filter(r => (r.status || '').toUpperCase() === 'JUAL').length;
+  const sitaCount = jualSitaList.filter(r => (r.status || '').toUpperCase() === 'SITA').length;
+  const totalMasukAll = (rk.tebusMasuk || 0) + (rk.perpanjangMasuk || 0) + buybackMasuk + jualMasuk + sitaMasuk;
 
   // ── Row builder (sesuai GAS buildRow) ──────────────────────
   const td: React.CSSProperties = { padding: '7px 10px', borderBottom: '1px solid rgba(46,51,73,.4)' };
@@ -247,6 +250,11 @@ export default function LaporanPage() {
                 <SumCard label="✅ Tebus Masuk" amount={fmtRp(rk.tebusMasuk)} color="var(--green)" sub={`${tebusOnly.filter(r => r.status === 'TEBUS').length} transaksi`} />
                 <SumCard label="🔁 Buyback" amount={fmtRp(buybackMasuk)} color="#06b6d4" sub={`${buybackCount} SJB`} />
                 <SumCard label="🔄 Perpanjang" amount={fmtRp(rk.perpanjangMasuk)} color="var(--accent)" sub={`${perpanjangList.length} transaksi`} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 8 }}>
+                <SumCard label="🏷️ Jual" amount={fmtRp(jualMasuk)} color="var(--gold)" sub={`${jualCount} transaksi`} />
+                <SumCard label="🔒 Sita" amount={fmtRp(sitaMasuk)} color="var(--text2)" sub={`${sitaCount} transaksi`} />
+                <div />
               </div>
               <div style={{ background: 'rgba(16,185,129,.07)', border: '1px solid rgba(16,185,129,.2)', borderRadius: 8, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>📥 Total Masuk</div>

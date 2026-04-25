@@ -20,8 +20,8 @@ function hitungLaba(st: string, jb: number, pi: number, gb: number): number {
     case 'PERPANJANG': return jb;
     case 'TAMBAH':     return (gb - jb) - pi;
     case 'KURANG':     return (jb + gb) - pi;
-    case 'JUAL':       return jb;
-    case 'SITA':       return 0;
+    case 'JUAL':       return jb - pi;  // = jumlah bayar - pinjaman akad
+    case 'SITA':       return jb - pi;  // = nilai sita - pinjaman akad
     default:           return jb - pi;
   }
 }
@@ -96,36 +96,20 @@ export default function DashboardPage() {
     jumlahLamaMap[nf] = Number(r.jumlah_gadai ?? 0);
   });
 
-  // Build set of no_faktur yang hari ini ada transaksi PERPANJANG / TAMBAH / KURANG
-  //   - tb_tebus  (gadai regular): PERPANJANG / TAMBAH / KURANG
-  //   - tb_buyback (SJB):          PERPANJANG saja (SJB tidak punya TAMBAH/KURANG)
-  // → row asli tidak perlu muncul lagi di tabel "Gadai Baru" (cukup di tabel Perpanjang
-  //   atau tampil sbg row TAMBAH/KURANG dgn jumlah baru)
-  const reissueNoFakturs = new Set<string>();
-  tebusRaw.forEach(r => {
-    const st = String(r.status ?? '').toUpperCase();
-    if (st === 'PERPANJANG' || st === 'TAMBAH' || st === 'KURANG') {
-      reissueNoFakturs.add(String(r.no_faktur ?? '').trim().toUpperCase());
-    }
-  });
-  buybackRaw.forEach(r => {
-    if (String(r.status ?? '').toUpperCase() === 'PERPANJANG') {
-      reissueNoFakturs.add(String(r.no_faktur ?? '').trim().toUpperCase());
-    }
-  });
+  // Tampilkan SEMUA akad asli hari ini di tabel "Gadai Baru" — tidak di-exclude meski
+  // ada PERPANJANG/TAMBAH/KURANG hari yg sama. Akad asli tetap perlu muncul sebagai
+  // histori. PERPANJANG/TAMBAH/KURANG tampil di section terpisah (Tebus / Perpanjang).
+  const gadaiFiltered = gadaiRaw;
+  const sjbFiltered   = sjbRaw;
 
-  // Filter gadai/sjb: exclude yang hari ini cuma PERPANJANG/TAMBAH/KURANG
-  const gadaiFiltered = gadaiRaw.filter(r =>
-    !reissueNoFakturs.has(String(r.no_faktur ?? '').trim().toUpperCase())
-  );
-  const sjbFiltered = sjbRaw.filter(r =>
-    !reissueNoFakturs.has(String(r.no_faktur ?? '').trim().toUpperCase())
-  );
-
-  // Build gadai table list
+  // Build gadai table list — akad asli only, tidak inject TAMBAH/KURANG
+  // (TAMBAH/KURANG tampil di tabel "Tebus / Tambah / Kurang" via tebusOnly).
   const gadaiTableList = [
     ...gadaiFiltered.map(r => {
       const nf = String(r.no_faktur ?? '').trim().toUpperCase();
+      // Pakai jumlah AKAD AWAL (jumlah_gadai sebelum TAMBAH/KURANG) supaya tabel
+      // "Gadai Baru" jujur sbg histori akad. tb_gadai.jumlah_gadai sudah di-update
+      // ke nilai baru saat TAMBAH/KURANG, jadi kita override dgn jumlahLamaMap.
       const correctedJumlah = jumlahLamaMap[nf] !== undefined
         ? jumlahLamaMap[nf]
         : Number(r.jumlah_gadai ?? 0);
@@ -136,17 +120,6 @@ export default function DashboardPage() {
       jumlah_gadai: Number(r.harga_jual ?? 0),
       _isSJB: true,
       _ket: '',
-    })),
-    ...tambahKurangRows.map(r => ({
-      no_faktur: r.no_faktur,
-      kategori: r.kategori,
-      barang: r.barang,
-      taksiran: Number(r.taksiran ?? 0),
-      jumlah_gadai: Number(r.jumlah_gadai_baru ?? 0),
-      payment: r.payment ?? 'CASH',
-      kasir: r.kasir ?? '',
-      _isSJB: false,  // tambah/kurang hanya dari gadai regular (SJB tidak punya)
-      _ket: String(r.status ?? '').toUpperCase(),
     })),
   ];
 
@@ -209,17 +182,15 @@ export default function DashboardPage() {
   ];
 
   // ── Rekap Keluar ─────────────────────────────────────────
-  // Total Keluar = row "Gadai Baru" yg ditampilkan di tabel:
-  //   • gadaiFiltered     → akad baru hari ini (exclude yg cuma PERPANJANG/TAMBAH/KURANG)
-  //   • sjbFiltered       → akad SJB baru hari ini (exclude PERPANJANG)
-  //   • tambahKurangRows  → TAMBAH/KURANG hari ini (pakai jumlah BARU)
-  // Konsisten antara count & nominal dgn tabel "Gadai Baru".
-  // SJB PERPANJANG tetap di-exclude (akad asli hari sebelumnya; SJB tdk punya TAMBAH/KURANG).
-  const gadaiNominal = gadaiFiltered.reduce((s, r) => s + Number(r.jumlah_gadai ?? 0), 0)
-    + tambahKurangRows.reduce((s, r) => s + Number(r.jumlah_gadai_baru ?? 0), 0);
-  const sjbNominal   = sjbFiltered.reduce((s, r) => s + Number(r.harga_jual ?? 0), 0);
-  const gadaiCount   = gadaiFiltered.length + tambahKurangRows.length;
-  const sjbCount     = sjbFiltered.length;
+  // Total Keluar = sum jumlah_gadai akad asli hari ini (gadai + sjb).
+  // Pakai jumlahLamaMap utk override row gadai yg sudah di-update TAMBAH/KURANG
+  // -> tetap pakai nominal akad awal.
+  const gadaiNominal = gadaiTableList
+    .filter(r => !r._isSJB)
+    .reduce((s, r) => s + Number(r.jumlah_gadai ?? 0), 0);
+  const sjbNominal = sjbFiltered.reduce((s, r) => s + Number(r.harga_jual ?? 0), 0);
+  const gadaiCount = gadaiFiltered.length;
+  const sjbCount   = sjbFiltered.length;
 
   // ── Rekap Masuk ──────────────────────────────────────────
   // Sesuai GAS: tb_buyback bisa berisi BUYBACK / PERPANJANG / SITA
@@ -249,15 +220,18 @@ export default function DashboardPage() {
     String(r.status ?? '').toUpperCase() === 'BUYBACK'
   ).length;
 
-  // Jual masuk from jualSitaList
-  let jualMasuk = 0, jualCount = 0, sitaCount = 0;
+  // Jual & Sita masuk dari jualSitaList. SITA secara kas = 0 (transfer ke aset gudang),
+  // tapi utk display "Total Masuk" di laporan harian, nilai sita dihitung sbg realized
+  // value masuk inventory (bukan kas).
+  let jualMasuk = 0, sitaMasuk = 0, jualCount = 0, sitaCount = 0;
   jualSitaList.forEach(r => {
     const st = String(r.status ?? '').toUpperCase();
-    if (st === 'JUAL') { jualMasuk += Number(r.jumlah_bayar ?? 0); jualCount++; }
-    if (st === 'SITA') sitaCount++;
+    const jb = Number(r.jumlah_bayar ?? 0);
+    if (st === 'JUAL') { jualMasuk += jb; jualCount++; }
+    if (st === 'SITA') { sitaMasuk += jb; sitaCount++; }
   });
 
-  const totalMasuk = tebusNom + buybackNom + perpanjangNom + jualMasuk;
+  const totalMasuk = tebusNom + buybackNom + perpanjangNom + jualMasuk + sitaMasuk;
 
   // ── Rekap Laba ───────────────────────────────────────────
   // Sesuai GAS: allTebusLike = tebusList + buybackList — status asli dipertahankan

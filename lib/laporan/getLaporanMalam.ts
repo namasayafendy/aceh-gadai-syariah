@@ -44,6 +44,7 @@ export interface LaporanExtras {
   labaTotal: number;
   buybackMasuk: number;
   jualMasuk: number;
+  sitaMasuk: number;
   totalMasukAll: number;
 }
 
@@ -91,16 +92,19 @@ export function computeLaporanExtras(d: LaporanMalamResult): LaporanExtras {
   const jualMasuk = jualSitaList
     .filter((r: any) => (r.status || '').toUpperCase() === 'JUAL')
     .reduce((s: number, r: any) => s + Number(r.jumlah_bayar || 0), 0);
+  const sitaMasuk = jualSitaList
+    .filter((r: any) => (r.status || '').toUpperCase() === 'SITA')
+    .reduce((s: number, r: any) => s + Number(r.jumlah_bayar || 0), 0);
 
   const totalMasukAll =
     (d.rekap.tebusMasuk || 0) +
     (d.rekap.perpanjangMasuk || 0) +
-    buybackMasuk + jualMasuk;
+    buybackMasuk + jualMasuk + sitaMasuk;
 
   return {
     allTebus, tebusOnly, perpanjangList, jualSitaList,
     labaTebus, labaBB, labaPjg, labaJual, labaSita, labaTK, labaTotal,
-    buybackMasuk, jualMasuk, totalMasukAll,
+    buybackMasuk, jualMasuk, sitaMasuk, totalMasukAll,
   };
 }
 
