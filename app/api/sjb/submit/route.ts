@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
       tgl_sita:      tglSita.toISOString(),
       nama:          body.nama.trim(),
       no_ktp:        body.noKtp ?? '',
+      alamat:        body.alamatNasabah ?? '',
       telp1:         body.telp1 ?? '',
       telp2:         body.telp2 ?? '',
       kategori:      body.kategori,

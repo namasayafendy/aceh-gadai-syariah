@@ -341,7 +341,8 @@ export default function SJBPage() {
         ...json, kasir: kasirName, status: bbStatus,
         // Data kontrak SJB dari bbData (akan di-reset setelah ini)
         _noSJB: bbData.no_faktur, _nama: bbData.nama, _noKtp: bbData.no_ktp || '',
-        _telp1: bbData.telp1 || '', _kategori: bbData.kategori, _barang: bbData.barang,
+        _telp1: bbData.telp1 || '', _alamatNasabah: bbData.alamat || '',
+        _kategori: bbData.kategori, _barang: bbData.barang,
         _kelengkapan: bbData.kelengkapan || '', _grade: bbData.grade || '', _imeiSn: bbData.imei_sn || '',
         _hargaJual: bbData.harga_jual || 0, _hargaBuyback: bbData.harga_buyback || 0,
         _lamaTitip: bbData.lama_titip || 30,
