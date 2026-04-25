@@ -251,6 +251,25 @@ export async function POST(request: NextRequest) {
       tglSitaBaru = fmt(tglSitaNew);
     }
 
+    // ── 9b. Tambah ke tb_gudang_sita kalau SITA (mirror /api/tebus/submit) ──
+    if (body.status === 'SITA') {
+      const sitaId = await safeGetNextId(db, 'SITA', outletId);
+      const modalTaksiran = Number(body.jumlahBayar ?? body.taksiran ?? body.hargaJual);
+      await db.from('tb_gudang_sita').insert({
+        sita_id:        sitaId,
+        no_faktur:      body.noSJB,
+        id_gadai:       body.idSJB,           // idSJB sbg ref ke akad SJB
+        tgl_sita:       now.toISOString(),
+        barang:         body.barang,
+        kategori:       body.kategori,
+        nama_nasabah:   body.nama,
+        keterangan:     'SITA',
+        taksiran_modal: modalTaksiran,
+        status_gudang:  'DI GUDANG SITA',
+        outlet:         outletName,
+      });
+    }
+
     // ── 10. Kas entries ───────────────────────────────────────
     // Map status ke jenisTransaksi (BUYBACK → TEBUS di kas)
     const kasJenis: TipeTransaksi = body.status === 'BUYBACK' ? 'TEBUS'
