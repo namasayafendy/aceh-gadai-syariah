@@ -102,6 +102,20 @@ export default function DashboardPage() {
   const gadaiFiltered = gadaiRaw;
   const sjbFiltered   = sjbRaw;
 
+  // Sort: by no_faktur ASC. Karena 'SBR-' < 'SJB-' alfabetis, SBR group
+  // otomatis di atas SJB group. Akad asli (_ket='') sebelum injection
+  // TAMBAH/KURANG kalau no_faktur sama.
+  const sortByNoFaktur = (a: any, b: any) => {
+    const na = String(a.no_faktur ?? '').toUpperCase();
+    const nb = String(b.no_faktur ?? '').toUpperCase();
+    if (na !== nb) return na < nb ? -1 : 1;
+    const ka = a._ket || '';
+    const kb = b._ket || '';
+    if (ka === '' && kb !== '') return -1;
+    if (kb === '' && ka !== '') return 1;
+    return 0;
+  };
+
   // Build gadai table list — akad asli + injection TAMBAH/KURANG row terpisah.
   // - Akad asli: pakai jumlahLamaMap override (tb_gadai.jumlah_gadai sudah
   //   di-update ke nilai baru saat TAMBAH/KURANG, jadi tampil nominal akad awal).
@@ -132,7 +146,7 @@ export default function DashboardPage() {
       _isSJB:    false,
       _ket:      String(r.status ?? '').toUpperCase(),
     })),
-  ];
+  ].sort(sortByNoFaktur);
 
   // Helper: normalisasi row tb_buyback supaya kompatibel dengan TebusTable
   // tb_buyback kolom beda: harga_jual/harga_jual_baru (bukan jumlah_gadai),
@@ -169,7 +183,7 @@ export default function DashboardPage() {
     ...buybackRaw
       .filter(r => String(r.status ?? '').toUpperCase() === 'BUYBACK')
       .map(mapBuybackRow),
-  ];
+  ].sort(sortByNoFaktur);
 
   // Perpanjang: gabung dari tb_tebus (gadai regular) + tb_buyback (SJB) — sesuai GAS allTebusLike
   const perpanjangList = [
@@ -177,7 +191,7 @@ export default function DashboardPage() {
     ...buybackRaw
       .filter(r => String(r.status ?? '').toUpperCase() === 'PERPANJANG')
       .map(mapBuybackRow),
-  ];
+  ].sort(sortByNoFaktur);
   // Jual / Sita: dari tb_tebus (gadai) + tb_buyback (SJB sita)
   const jualSitaList = [
     ...tebusRaw.filter(r => {
@@ -190,7 +204,7 @@ export default function DashboardPage() {
         return st === 'JUAL' || st === 'SITA';
       })
       .map(mapBuybackRow),
-  ];
+  ].sort(sortByNoFaktur);
 
   // ── Rekap Keluar ─────────────────────────────────────────
   // Total Keluar = sum jumlah_gadai akad asli hari ini (gadai + sjb).
