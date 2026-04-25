@@ -559,10 +559,23 @@ function AkunLoginTab({ requestPin }: { requestPin: (a: string, fn: (pin: string
 // ═══════════════════════════════════════════════════════════
 function RakTab({ requestPin }: { requestPin: (a: string, fn: (pin: string) => void) => void }) {
   const [rows, setRows] = useState<any[]>([]);
+  const [outletList, setOutletList] = useState<{ id: number; nama: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  // Bulk add modal state
+  const [bulk, setBulk] = useState<null | { tipe: string; kategori: string; outlet_id: number; keterangan: string; kodes: string }>(null);
   const [filterOutlet, setFilterOutlet] = useState('0');
   const [msg, setMsg] = useState('');
+
+  // Load outlets sekali (untuk dropdown filter & form)
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch('/api/outlet').then(x => x.json());
+        if (r.ok) setOutletList(r.rows.map((x: any) => ({ id: x.id, nama: x.nama })));
+      } catch {}
+    })();
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -587,6 +600,35 @@ function RakTab({ requestPin }: { requestPin: (a: string, fn: (pin: string) => v
     });
   }
 
+  function saveBulk() {
+    if (!bulk) return;
+    const kodeList = bulk.kodes.split(/[,\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+    if (kodeList.length === 0) { setMsg('Minimal 1 kode rak.'); return; }
+    if (kodeList.length > 50) { setMsg('Maksimal 50 rak per submit.'); return; }
+    if (!bulk.outlet_id) { setMsg('Pilih outlet.'); return; }
+
+    const rowsToInsert = kodeList.map(kode => ({
+      kode, nama: kode, kategori: bulk.kategori, tipe: bulk.tipe,
+      outlet_id: bulk.outlet_id, keterangan: bulk.keterangan,
+    }));
+
+    requestPin(`Tambah ${kodeList.length} rak (${bulk.tipe}/${bulk.kategori || 'Semua'})`, async (pin) => {
+      const res = await fetch('/api/owner', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rak-bulk-save', pin, rows: rowsToInsert }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        const summary = `${json.inserted} rak ditambah` + (json.skipped ? ` (${json.skipped} di-skip)` : '');
+        setBulk(null); setMsg('');
+        load();
+        alert(summary + (json.errors ? '\n\n' + json.errors.join('\n') : ''));
+      } else {
+        setMsg(json.msg || 'Gagal');
+      }
+    });
+  }
+
   function deleteRak(id: string, kode: string) {
     if (!confirm(`Hapus rak ${kode}?`)) return;
     requestPin(`Hapus rak ${kode}`, async (pin) => {
@@ -599,15 +641,25 @@ function RakTab({ requestPin }: { requestPin: (a: string, fn: (pin: string) => v
     });
   }
 
+  const outletNamaById = (id: number) => outletList.find(o => o.id === id)?.nama ?? `#${id}`;
+
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <div style={{ fontSize: 15, fontWeight: 700 }}>📦 Manajemen Rak Gudang</div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <select value={filterOutlet} onChange={e => setFilterOutlet(e.target.value)} style={{ padding: '6px 10px', fontSize: 12 }}>
-            <option value="0">Semua Outlet</option><option value="1">Outlet 1</option><option value="2">Outlet 2</option>
+            <option value="0">Semua Outlet</option>
+            {outletList.map(o => <option key={o.id} value={String(o.id)}>{o.nama}</option>)}
           </select>
-          <button className="btn btn-primary btn-sm" onClick={() => setEditing({ kode: '', nama: '', kategori: '', tipe: 'GADAI', keterangan: '', outlet_id: 1 })}>+ Tambah Rak</button>
+          <button className="btn btn-outline btn-sm"
+            onClick={() => setBulk({ tipe: 'GADAI', kategori: '', outlet_id: outletList[0]?.id ?? 1, keterangan: '', kodes: '' })}>
+            ➕➕ Tambah Banyak
+          </button>
+          <button className="btn btn-primary btn-sm"
+            onClick={() => setEditing({ kode: '', nama: '', kategori: '', tipe: 'GADAI', keterangan: '', outlet_id: outletList[0]?.id ?? 1 })}>
+            + Tambah 1 Rak
+          </button>
         </div>
       </div>
 
@@ -622,9 +674,9 @@ function RakTab({ requestPin }: { requestPin: (a: string, fn: (pin: string) => v
                 <td style={{ fontWeight: 700, fontFamily: 'var(--mono)' }}>{r.kode}</td>
                 <td>{r.nama}</td>
                 <td>{r.kategori || '—'}</td>
-                  <td><span className={`badge ${(r.tipe||'GADAI').toLowerCase()}`}>{r.tipe || 'GADAI'}</span></td>
+                <td><span className={`badge ${(r.tipe||'GADAI').toLowerCase()}`}>{r.tipe || 'GADAI'}</span></td>
                 <td>{r.keterangan || '—'}</td>
-                <td>{r.outlet || `Outlet ${r.outlet_id}`}</td>
+                <td>{r.outlet || outletNamaById(r.outlet_id)}</td>
                 <td style={{ display: 'flex', gap: 4 }}>
                   <button className="btn btn-outline btn-sm" onClick={() => setEditing({ ...r })}>Edit</button>
                   <button className="btn btn-outline btn-sm" style={{ color: 'var(--red)', borderColor: 'rgba(239,68,68,.4)' }} onClick={() => deleteRak(r.id, r.kode)}>Hapus</button>
@@ -635,6 +687,7 @@ function RakTab({ requestPin }: { requestPin: (a: string, fn: (pin: string) => v
         </table>
       </div>
 
+      {/* Modal Edit/Tambah 1 Rak */}
       {editing && (
         <div className="pin-overlay" onClick={() => setEditing(null)}>
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 28, width: 420 }} onClick={e => e.stopPropagation()}>
@@ -651,11 +704,62 @@ function RakTab({ requestPin }: { requestPin: (a: string, fn: (pin: string) => v
                 <option value="GADAI">GADAI</option><option value="SJB">SJB</option>
               </select>
             </div>
-            <div className="form-group"><label>Outlet ID *</label><input type="number" value={editing.outlet_id || 1} min={1} onChange={e => setEditing({ ...editing, outlet_id: parseInt(e.target.value) || 1 })} /></div>
+            <div className="form-group"><label>Outlet *</label>
+              <select value={editing.outlet_id || ''} onChange={e => setEditing({ ...editing, outlet_id: parseInt(e.target.value) })}>
+                {outletList.map(o => <option key={o.id} value={o.id}>{o.nama}</option>)}
+              </select>
+            </div>
             {msg && <div className="alert-error">{msg}</div>}
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
               <button className="btn btn-primary btn-full" onClick={saveRak}>💾 Simpan</button>
               <button className="btn btn-outline btn-full" onClick={() => { setEditing(null); setMsg(''); }}>Batal</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tambah Banyak */}
+      {bulk && (
+        <div className="pin-overlay" onClick={() => setBulk(null)}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 28, width: 460 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>➕➕ Tambah Banyak Rak Sekaligus</h3>
+            <p style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 12 }}>
+              Semua rak dibuat dengan tipe + kategori + outlet yg sama. Nama rak otomatis = kode.
+            </p>
+            <div className="form-group"><label>Outlet *</label>
+              <select value={bulk.outlet_id} onChange={e => setBulk({ ...bulk, outlet_id: parseInt(e.target.value) })}>
+                {outletList.map(o => <option key={o.id} value={o.id}>{o.nama}</option>)}
+              </select>
+            </div>
+            <div className="form-group"><label>Tipe *</label>
+              <select value={bulk.tipe} onChange={e => setBulk({ ...bulk, tipe: e.target.value })}>
+                <option value="GADAI">GADAI</option><option value="SJB">SJB</option>
+              </select>
+            </div>
+            <div className="form-group"><label>Kategori (auto-assign)</label>
+              <select value={bulk.kategori} onChange={e => setBulk({ ...bulk, kategori: e.target.value })}>
+                <option value="">Semua</option><option>HANDPHONE</option><option>LAPTOP</option><option>ELEKTRONIK</option><option>EMAS</option><option>EMAS PAUN</option>
+              </select>
+            </div>
+            <div className="form-group"><label>Daftar Kode Rak (pisah koma atau spasi) *</label>
+              <textarea
+                value={bulk.kodes}
+                onChange={e => setBulk({ ...bulk, kodes: e.target.value })}
+                placeholder="A, B, C, D, E"
+                rows={3}
+                style={{ width: '100%', fontFamily: 'var(--mono, monospace)', fontSize: 14, letterSpacing: 1, textTransform: 'uppercase' }}
+              />
+              <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4 }}>
+                Maks 50 kode. Duplikat di outlet yg sama akan di-skip otomatis.
+              </div>
+            </div>
+            <div className="form-group"><label>Keterangan (opsional, sama utk semua)</label>
+              <input value={bulk.keterangan} onChange={e => setBulk({ ...bulk, keterangan: e.target.value })} placeholder="Lantai 1, dll" />
+            </div>
+            {msg && <div className="alert-error">{msg}</div>}
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button className="btn btn-primary btn-full" onClick={saveBulk}>💾 Simpan Semua</button>
+              <button className="btn btn-outline btn-full" onClick={() => { setBulk(null); setMsg(''); }}>Batal</button>
             </div>
           </div>
         </div>

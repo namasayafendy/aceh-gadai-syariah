@@ -302,6 +302,64 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // ── Rak: bulk insert (array kode utk 1 outlet+kategori+tipe) ──
+    // Body: { rows: [{ kode, nama, kategori, tipe, outlet_id, keterangan }, ...], pin }
+    // Tidak menyentuh rak-save existing; logic assignment rak ke gadai TIDAK berubah.
+    if (action === 'rak-bulk-save') {
+      const rowsRaw: any[] = Array.isArray(body.rows) ? body.rows : [];
+      if (rowsRaw.length === 0) {
+        return NextResponse.json({ ok: false, msg: 'Daftar rak kosong.' });
+      }
+
+      // Normalize + validate
+      const oidCache: Record<number, string> = {};
+      const inserts: any[] = [];
+      const errors: string[] = [];
+      const baseTs = Date.now();
+      for (let i = 0; i < rowsRaw.length; i++) {
+        const r = rowsRaw[i];
+        const kode = String(r.kode ?? '').trim().toUpperCase();
+        const nama = String(r.nama ?? '').trim() || kode; // default nama = kode
+        if (!kode) { errors.push(`Baris ${i + 1}: kode kosong.`); continue; }
+        const oid = parseInt(r.outlet_id) || 1;
+        if (!(oid in oidCache)) {
+          const { data: o } = await db.from('outlets').select('nama').eq('id', oid).single();
+          oidCache[oid] = o ? String((o as any).nama) : '';
+        }
+        const outletName = oidCache[oid];
+        if (!outletName) { errors.push(`Baris ${i + 1}: outlet ${oid} tidak ditemukan.`); continue; }
+
+        // Cek duplikat kode di outlet yg sama (skip kalau ada)
+        const { data: dup } = await db.from('tb_rak')
+          .select('id').eq('outlet_id', oid).eq('kode', kode).maybeSingle();
+        if (dup) { errors.push(`Baris ${i + 1}: kode '${kode}' sudah ada di outlet ${outletName}.`); continue; }
+
+        inserts.push({
+          id: `RAK-${baseTs}-${i}`,
+          kode, nama,
+          kategori: r.kategori || null,
+          tipe: r.tipe || 'GADAI',
+          keterangan: r.keterangan || null,
+          outlet_id: oid,
+          outlet: outletName,
+        });
+      }
+
+      if (inserts.length === 0) {
+        return NextResponse.json({ ok: false, msg: errors.join(' | ') || 'Tidak ada rak valid.' });
+      }
+
+      const { error: insErr } = await db.from('tb_rak').insert(inserts);
+      if (insErr) return NextResponse.json({ ok: false, msg: 'Gagal insert: ' + insErr.message });
+
+      return NextResponse.json({
+        ok: true,
+        inserted: inserts.length,
+        skipped: errors.length,
+        errors: errors.length ? errors : undefined,
+      });
+    }
+
     // ── Outlet: add new ──────────────────────────────────
     if (action === 'outlet-add') {
       const { nama, alamat, kota, telpon, waktu_operasional, nama_perusahaan } = body;
