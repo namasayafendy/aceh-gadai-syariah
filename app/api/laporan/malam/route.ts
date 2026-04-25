@@ -122,6 +122,24 @@ export async function GET(request: NextRequest) {
     const gadaiFiltered = gadaiRaw ?? [];  // akad asli tetap muncul di 'Gadai Baru' (Opsi C)
     const sjbFiltered   = sjbRaw   ?? [];  // SJB akad asli tetap muncul
 
+    // jumlahLamaMap: override jumlah_gadai akad asli ke nilai AWAL (sebelum
+    // TAMBAH/KURANG update tb_gadai). Konsisten dgn dashboard.
+    const jumlahLamaMap: Record<string, number> = {};
+    (tebusRaw ?? []).forEach(r => {
+      const st = String(r.status ?? '').toUpperCase();
+      if (st === 'TAMBAH' || st === 'KURANG') {
+        const nf = String(r.no_faktur ?? '').trim().toUpperCase();
+        jumlahLamaMap[nf] = Number(r.jumlah_gadai ?? 0);
+      }
+    });
+    const gadaiWithOriginal = gadaiFiltered.map(r => {
+      const nf = String(r.no_faktur ?? '').trim().toUpperCase();
+      if (jumlahLamaMap[nf] !== undefined) {
+        return { ...r, jumlah_gadai: jumlahLamaMap[nf] };
+      }
+      return r;
+    });
+
     // Inject TAMBAH/KURANG sbg row di "Gadai Baru" pakai jumlah baru (mirror dashboard)
     // SJB tidak punya TAMBAH/KURANG → hanya dari tb_tebus
     const tambahKurangInjected = (tebusRaw ?? []).filter(r => {
@@ -149,7 +167,7 @@ export async function GET(request: NextRequest) {
     //   • sjbFiltered          → akad SJB baru hari ini (exclude PERPANJANG)
     //   • tambahKurangInjected → TAMBAH/KURANG hari ini (pakai jumlah BARU)
     // Konsisten antara count & nominal dgn tabel "Gadai Baru". (match dashboard)
-    gadaiFiltered.forEach(r => { gadaiKeluar += Number(r.jumlah_gadai ?? 0); });
+    gadaiWithOriginal.forEach(r => { gadaiKeluar += Number(r.jumlah_gadai ?? 0); });
     tambahKurangInjected.forEach(r => { gadaiKeluar += Number(r.jumlah_gadai ?? 0); });
     sjbFiltered.forEach(r   => { sjbKeluar   += Number(r.harga_jual    ?? 0); });
 
