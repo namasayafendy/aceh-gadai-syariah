@@ -314,6 +314,16 @@ export default function SJBPage() {
       }
     }
 
+    // Hitung hari aktual = selisih now vs tgl akad SJB (tgl_gadai). Pakai
+    // Math.max(0,...) supaya tidak negatif (kalau jam sistem tidak sinkron).
+    let _hariAkt = 0;
+    if (bbData.tgl_gadai) {
+      const _tj = new Date(bbData.tgl_gadai).getTime();
+      if (Number.isFinite(_tj)) {
+        _hariAkt = Math.max(0, Math.floor((Date.now() - _tj) / 86_400_000));
+      }
+    }
+
     try {
       const res = await fetch('/api/sjb/buyback', {
         method: 'POST',
@@ -324,7 +334,7 @@ export default function SJBPage() {
           kategori: bbData.kategori, barang: bbData.barang,
           taksiran: bbData.taksiran || bbData.harga_jual,
           hargaJual: bbData.harga_jual,
-          hariAktual: 0, ujrahBerjalan: 0,
+          hariAktual: _hariAkt, ujrahBerjalan: 0,
           totalSistem: bbTotalSistem, jumlahBayar: jmlBayar,
           alasan: bbAlasan.trim(),
           payment: bbPayment === 'SPLIT' ? 'SPLIT' : bbPayment,
@@ -349,7 +359,7 @@ export default function SJBPage() {
         _locationGudang: bbData.rak || '', _barcodeA: bbData.barcode_a || '', _barcodeB: bbData.barcode_b || bbData.no_faktur || '',
         _tglJual: bbData.tgl_gadai || '',
         _totalSistem: bbTotalSistem, _jumlahBayar: jmlBayar, _alasan: bbAlasan.trim(),
-        _hariAktual: 0,
+        _hariAktual: _hariAkt,
       });
       setBbBarcode(''); setBbData(null); setBbStatus(''); setBbJmlBayarRaw(''); setBbAlasan(''); setBbTanpaSurat(false);
       // Fase 3: reset state approval setelah submit sukses

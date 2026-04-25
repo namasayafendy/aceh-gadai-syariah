@@ -231,7 +231,7 @@ export function printTebus(r: TebusPrintData) {
       +`<tr><td style="padding:3px 0">No Faktur</td><td style="padding:3px 0">: ${r.noFaktur||''}</td></tr>`
       +`<tr><td style="padding:3px 0">Jumlah pinjaman</td><td style="padding:3px 0">: ${fmtRp(r.jumlahGadai)}</td></tr>`
       +`<tr><td style="padding:3px 0">Ujrah berjalan</td><td style="padding:3px 0">: ${fmtRp(r.ujrahBerjalan)}</td></tr>`
-      +`<tr><td style="padding:3px 0">Lama masa titip</td><td style="padding:3px 0">: ${r.hariAktual||'-'} Hari</td></tr>`
+      +`<tr><td style="padding:3px 0">Lama masa titip</td><td style="padding:3px 0">: ${r.hariAktual ?? '-'} Hari</td></tr>`
       +`<tr><td style="padding:3px 0">Besaran potongan ujrah</td><td style="padding:3px 0">: <b>${fmtRp(selisihVal)}</b></td></tr>`
       +`<tr><td style="padding:3px 0">Total yang dibayarkan</td><td style="padding:3px 0">: <b>${fmtRp(r.jumlahBayar)}</b></td></tr>`
       +`<tr><td style="padding:3px 0">Status</td><td style="padding:3px 0">: ${r.status||''}</td></tr>`
@@ -427,7 +427,7 @@ export function printSJBTebus(r: SJBTebusPrintData) {
       +`<tr><td style="padding:3px 6px">Barang</td><td style="padding:3px 6px">: ${r.kategori||''} / ${r.barang||''}</td></tr>`
       +(r.locationGudang?`<tr><td style="padding:3px 6px;font-weight:bold">Lokasi Rak</td><td style="padding:3px 6px;font-weight:bold">: ${r.locationGudang}</td></tr>`:'')
       +`<tr><td style="padding:3px 6px">Harga Jual (dulu)</td><td style="padding:3px 6px">: ${fmtRp(r.hargaJual)}</td></tr>`
-      +`<tr><td style="padding:3px 6px">Lama Titip</td><td style="padding:3px 6px">: ${r.hariAktual||'-'} hari</td></tr>`
+      +`<tr><td style="padding:3px 6px">Lama Titip</td><td style="padding:3px 6px">: ${r.hariAktual ?? '-'} hari</td></tr>`
       +`<tr><td style="padding:3px 6px">Total Sistem</td><td style="padding:3px 6px">: ${fmtRp(r.ujrahBerjalan||r.totalSistem||0)}</td></tr>`
       +((parseFloat(String(r.selisih||0)))>0?`<tr><td style="padding:3px 6px;color:green">Diskon</td><td style="padding:3px 6px;color:green">: ${fmtRp(r.selisih||0)}${r.alasan?' ('+r.alasan+')':''}</td></tr>`:'')
       +`<tr style="border-top:2px solid #000;font-weight:bold"><td style="padding:3px 6px">Total Pembayaran</td><td style="padding:3px 6px;font-size:12px">: ${fmtRp(r.jumlahBayar)}</td></tr>`
@@ -469,7 +469,7 @@ export function printSJBTebus(r: SJBTebusPrintData) {
       +`<tr><td style="padding:3px 0;width:160px">Nama</td><td style="padding:3px 0">: <b>${namaDisplay}</b></td></tr>`
       +`<tr><td style="padding:3px 0">No SJB</td><td style="padding:3px 0">: ${r.noSJB||r.noFaktur||''}</td></tr>`
       +`<tr><td style="padding:3px 0">Harga Jual Titip</td><td style="padding:3px 0">: ${fmtRp(r.hargaJual)}</td></tr>`
-      +`<tr><td style="padding:3px 0">Lama titip</td><td style="padding:3px 0">: ${r.hariAktual||'-'} Hari</td></tr>`
+      +`<tr><td style="padding:3px 0">Lama titip</td><td style="padding:3px 0">: ${r.hariAktual ?? '-'} Hari</td></tr>`
       +`<tr><td style="padding:3px 0">Total seharusnya</td><td style="padding:3px 0">: ${fmtRp(r.ujrahBerjalan||r.totalSistem||0)}</td></tr>`
       +`<tr><td style="padding:3px 0">Besaran diskon</td><td style="padding:3px 0">: <b>${fmtRp(selisihVal)}</b></td></tr>`
       +`<tr><td style="padding:3px 0">Total yang dibayarkan</td><td style="padding:3px 0">: <b>${fmtRp(r.jumlahBayar)}</b></td></tr>`
