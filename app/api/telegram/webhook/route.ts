@@ -88,6 +88,30 @@ async function handleMessage(db: any, msg: any) {
       .then(() => {}, () => {});
   }
 
+  // ── Auto-handle group → supergroup upgrade ──
+  // Telegram kirim event 'migrate_to_chat_id' ke chat lama saat group di-upgrade.
+  // Tanpa handler ini, outlets.telegram_chat_id tetap pakai ID lama -> semua
+  // notif diskon/transfer/laporan ke grup tsb akan return:
+  //   "Bad Request: group chat was upgraded to a supergroup chat"
+  if (msg.migrate_to_chat_id && chatId) {
+    const newId = Number(msg.migrate_to_chat_id);
+    if (Number.isFinite(newId)) {
+      // Update outlet yg pakai chat_id lama
+      await db.from('outlets')
+        .update({ telegram_chat_id: newId, telegram_registered_at: new Date().toISOString() })
+        .eq('telegram_chat_id', chatId)
+        .then(() => {}, () => {});
+      // Update app_settings (grup laporan malam) kalau cocok
+      await db.from('app_settings')
+        .update({ value: String(newId), updated_by: 'auto_migrate', updated_at: new Date().toISOString() })
+        .eq('key', 'laporan_malam_chat_id')
+        .eq('value', String(chatId))
+        .then(() => {}, () => {});
+      console.log(`[telegram] auto-migrate chat_id ${chatId} -> ${newId}`);
+    }
+    return; // Tidak ada follow-up message ke chat lama (sudah deprecated)
+  }
+
   // ── Commands ──
   const cmd = text.split(/\s+/)[0].toLowerCase().split('@')[0]; // handle /cmd@botname
   const arg = text.substring(text.split(/\s+/)[0].length).trim();
