@@ -119,8 +119,8 @@ export async function GET(request: NextRequest) {
     const isReissue = (r: any) =>
       reissueNoFakturs.has(String(r.no_faktur ?? '').trim().toUpperCase());
 
-    const gadaiFiltered = (gadaiRaw ?? []).filter(r => !isReissue(r));
-    const sjbFiltered   = (sjbRaw   ?? []).filter(r => !isReissue(r));
+    const gadaiFiltered = gadaiRaw ?? [];  // akad asli tetap muncul di 'Gadai Baru' (Opsi C)
+    const sjbFiltered   = sjbRaw   ?? [];  // SJB akad asli tetap muncul
 
     // Inject TAMBAH/KURANG sbg row di "Gadai Baru" pakai jumlah baru (mirror dashboard)
     // SJB tidak punya TAMBAH/KURANG → hanya dari tb_tebus

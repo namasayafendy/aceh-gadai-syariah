@@ -102,14 +102,14 @@ export default function DashboardPage() {
   const gadaiFiltered = gadaiRaw;
   const sjbFiltered   = sjbRaw;
 
-  // Build gadai table list — akad asli only, tidak inject TAMBAH/KURANG
-  // (TAMBAH/KURANG tampil di tabel "Tebus / Tambah / Kurang" via tebusOnly).
+  // Build gadai table list — akad asli + injection TAMBAH/KURANG row terpisah.
+  // - Akad asli: pakai jumlahLamaMap override (tb_gadai.jumlah_gadai sudah
+  //   di-update ke nilai baru saat TAMBAH/KURANG, jadi tampil nominal akad awal).
+  // - Injection TAMBAH/KURANG: tampil row tersendiri dgn jumlah_gadai_baru
+  //   (= sisa pinjaman setelah perubahan), label _ket = TAMBAH / KURANG.
   const gadaiTableList = [
     ...gadaiFiltered.map(r => {
       const nf = String(r.no_faktur ?? '').trim().toUpperCase();
-      // Pakai jumlah AKAD AWAL (jumlah_gadai sebelum TAMBAH/KURANG) supaya tabel
-      // "Gadai Baru" jujur sbg histori akad. tb_gadai.jumlah_gadai sudah di-update
-      // ke nilai baru saat TAMBAH/KURANG, jadi kita override dgn jumlahLamaMap.
       const correctedJumlah = jumlahLamaMap[nf] !== undefined
         ? jumlahLamaMap[nf]
         : Number(r.jumlah_gadai ?? 0);
@@ -120,6 +120,17 @@ export default function DashboardPage() {
       jumlah_gadai: Number(r.harga_jual ?? 0),
       _isSJB: true,
       _ket: '',
+    })),
+    ...tambahKurangRows.map(r => ({
+      no_faktur: r.no_faktur,
+      kategori:  r.kategori,
+      barang:    r.barang,
+      taksiran:  Number(r.taksiran ?? 0),
+      jumlah_gadai: Number(r.jumlah_gadai_baru ?? 0),
+      payment:   r.payment ?? 'CASH',
+      kasir:     r.kasir ?? '',
+      _isSJB:    false,
+      _ket:      String(r.status ?? '').toUpperCase(),
     })),
   ];
 
@@ -185,11 +196,13 @@ export default function DashboardPage() {
   // Total Keluar = sum jumlah_gadai akad asli hari ini (gadai + sjb).
   // Pakai jumlahLamaMap utk override row gadai yg sudah di-update TAMBAH/KURANG
   // -> tetap pakai nominal akad awal.
+  // Total Keluar = sum semua row di tabel "Gadai Baru" (akad asli + injection
+  // TAMBAH/KURANG). Konsisten antara display tabel & angka total.
   const gadaiNominal = gadaiTableList
     .filter(r => !r._isSJB)
     .reduce((s, r) => s + Number(r.jumlah_gadai ?? 0), 0);
   const sjbNominal = sjbFiltered.reduce((s, r) => s + Number(r.harga_jual ?? 0), 0);
-  const gadaiCount = gadaiFiltered.length;
+  const gadaiCount = gadaiFiltered.length + tambahKurangRows.length;
   const sjbCount   = sjbFiltered.length;
 
   // ── Rekap Masuk ──────────────────────────────────────────
