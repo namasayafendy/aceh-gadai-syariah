@@ -57,22 +57,28 @@ export default function TelegramSettingsPage() {
   const [laporanSettings, setLaporanSettings] = useState<LaporanSettings | null>(null);
   const [laporanCode, setLaporanCode] = useState<{ kode: string; expiresAt: string } | null>(null);
 
+  // Grup OTP Login (1 grup global utk kode OTP login KASIR/ADMIN)
+  const [otpSettings, setOtpSettings] = useState<LaporanSettings | null>(null);
+  const [otpCode, setOtpCode] = useState<{ kode: string; expiresAt: string } | null>(null);
+
   // PIN modal
   const [pinAction, setPinAction] = useState<null | { kind: string; payload?: any; title: string }>(null);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [bot, aps, outs, lap] = await Promise.all([
+      const [bot, aps, outs, lap, otp] = await Promise.all([
         fetch('/api/telegram/set-webhook').then(r => r.json()),
         fetch('/api/settings/telegram/approvers').then(r => r.json()),
         fetch('/api/settings/telegram/register-code').then(r => r.json()),
         fetch('/api/settings/telegram/laporan-code').then(r => r.json()),
+        fetch('/api/settings/telegram/otp-code').then(r => r.json()),
       ]);
       if (bot.ok) setBotInfo({ me: bot.me, webhook: bot.webhook });
       if (aps.ok) setApprovers(aps.rows);
       if (outs.ok) setOutlets(outs.outlets);
       if (lap.ok) setLaporanSettings(lap.settings);
+      if (otp.ok) setOtpSettings(otp.settings);
     } catch (err) {
       setMsg({ type: 'err', text: 'Gagal load data: ' + String(err) });
     } finally {
@@ -150,6 +156,21 @@ export default function TelegramSettingsPage() {
           method: 'DELETE',
         }).then(x => x.json());
         if (r.ok) { showMsg('ok', 'Grup laporan di-unlink'); setLaporanCode(null); loadAll(); }
+        else showMsg('err', r.msg ?? 'Gagal');
+      } else if (kind === 'genOtpCode') {
+        const r = await fetch('/api/settings/telegram/otp-code', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin }),
+        }).then(x => x.json());
+        if (r.ok) {
+          setOtpCode({ kode: r.kode, expiresAt: r.expiresAt });
+          showMsg('ok', 'Kode dibuat. Berlaku 15 menit.');
+        } else showMsg('err', r.msg ?? 'Gagal');
+      } else if (kind === 'unregisterOtp') {
+        const r = await fetch(`/api/settings/telegram/otp-code?pin=${encodeURIComponent(pin)}`, {
+          method: 'DELETE',
+        }).then(x => x.json());
+        if (r.ok) { showMsg('ok', 'Grup OTP di-unlink'); setOtpCode(null); loadAll(); }
         else showMsg('err', r.msg ?? 'Gagal');
       }
     } catch (err) {
@@ -389,6 +410,57 @@ export default function TelegramSettingsPage() {
                   </div>
                   <div style={{ marginTop: 4, color: 'var(--yellow)' }}>
                     Berlaku sampai {new Date(laporanCode.expiresAt).toLocaleTimeString('id-ID')}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* Section 5 — Grup OTP Login (1 grup global, OTP setiap login KASIR/ADMIN) */}
+        <section className="card" style={{ marginBottom: 20, padding: 16 }}>
+          <h2 style={{ fontSize: 16, marginBottom: 4 }}>🔐 Grup OTP Login</h2>
+          <p style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 12 }}>
+            Setiap login KASIR/ADMIN akan terkirim kode OTP 6 digit ke 1 grup ini.
+            Berlaku 5 menit. OWNER tidak butuh OTP. Outlet baru otomatis terlayani.
+          </p>
+          {otpSettings?.chatId ? (
+            <div>
+              <div style={{ marginBottom: 8 }}>
+                <span className="badge" style={{ background: 'var(--green-dim)', color: 'var(--green)' }}>
+                  ✅ Terhubung
+                </span>
+                <span style={{ marginLeft: 8, fontSize: 12 }}>
+                  {otpSettings.groupTitle ?? '(tanpa nama)'}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
+                Chat ID: <code>{otpSettings.chatId}</code>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 10 }}>
+                Terdaftar: {otpSettings.registeredAt ? new Date(otpSettings.registeredAt).toLocaleString('id-ID') : '—'}
+              </div>
+              <button className="btn btn-danger btn-sm"
+                onClick={() => setPinAction({ kind: 'unregisterOtp', payload: {}, title: 'Unlink Grup OTP' })}>
+                🔗❌ Unlink Grup
+              </button>
+            </div>
+          ) : (
+            <div>
+              <button className="btn btn-primary btn-sm"
+                onClick={() => setPinAction({ kind: 'genOtpCode', payload: {}, title: 'Kode Setup Grup OTP' })}>
+                🔑 Generate Kode Setup
+              </button>
+              {otpCode && (
+                <div style={{ marginTop: 10, padding: 10, background: 'var(--surface2)', borderRadius: 6, fontSize: 12 }}>
+                  <div><b>Kode:</b> <code style={{ fontSize: 14, fontWeight: 700, userSelect: 'all' }}>{otpCode.kode}</code></div>
+                  <div style={{ marginTop: 6, color: 'var(--text3)' }}>
+                    1. Buat/buka grup Telegram tujuan OTP<br />
+                    2. Invite <b>@sistem_gadai_bot</b>, jadikan admin<br />
+                    3. Kirim di grup: <code>/register-otp {otpCode.kode}</code>
+                  </div>
+                  <div style={{ marginTop: 4, color: 'var(--yellow)' }}>
+                    Berlaku sampai {new Date(otpCode.expiresAt).toLocaleTimeString('id-ID')}
                   </div>
                 </div>
               )}

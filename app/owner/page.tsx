@@ -13,7 +13,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { formatRp, formatDate } from '@/lib/format';
 import { printGadai, printSJB } from '@/lib/print';
 
-type OwnerTab = 'ringkasan' | 'karyawan' | 'akun-login' | 'rak' | 'outlet' | 'backup' | 'reprint';
+type OwnerTab = 'ringkasan' | 'karyawan' | 'akun-login' | 'rak' | 'outlet' | 'otp-master' | 'backup' | 'reprint';
 
 const TABS: { id: OwnerTab; icon: string; label: string }[] = [
   { id: 'ringkasan', icon: '📊', label: 'Ringkasan' },
@@ -21,6 +21,7 @@ const TABS: { id: OwnerTab; icon: string; label: string }[] = [
   { id: 'akun-login', icon: '🔐', label: 'Akun Login' },
   { id: 'rak', icon: '📦', label: 'Rak Gudang' },
   { id: 'outlet', icon: '🏢', label: 'Outlet' },
+  { id: 'otp-master', icon: '🔐', label: 'OTP Master' },
   { id: 'backup', icon: '💾', label: 'Backup Status' },
   { id: 'reprint', icon: '🖨️', label: 'Reprint Kontrak' },
 ];
@@ -70,6 +71,7 @@ export default function OwnerPage() {
           {tab === 'akun-login' && <AkunLoginTab requestPin={requestPin} />}
           {tab === 'rak' && <RakTab requestPin={requestPin} />}
           {tab === 'outlet' && <OutletTab requestPin={requestPin} />}
+          {tab === 'otp-master' && <OtpMasterTab requestPin={requestPin} />}
           {tab === 'backup' && <BackupTab />}
           {tab === 'reprint' && <ReprintTab />}
         </div>
@@ -929,3 +931,131 @@ function ReprintTab() {
     </div>
   );
 }
+
+// ═══════════════════════════════════════════════════════════
+// TAB: OTP MASTER
+// ═══════════════════════════════════════════════════════════
+function OtpMasterTab({ requestPin }: { requestPin: (a: string, fn: (pin: string) => void) => void }) {
+  const [kode, setKode] = useState<string | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [updatedBy, setUpdatedBy] = useState<string | null>(null);
+  const [inputKode, setInputKode] = useState('');
+  const [show, setShow] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch('/api/owner/master-otp').then(x => x.json());
+      if (r.ok) {
+        setKode(r.kode);
+        setUpdatedAt(r.updatedAt);
+        setUpdatedBy(r.updatedBy);
+      }
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function showMsg(type: 'ok' | 'err', text: string) {
+    setMsg({ type, text });
+    setTimeout(() => setMsg(null), 5000);
+  }
+
+  function rotate(useInput: boolean) {
+    requestPin(useInput ? 'Set Kode Master Manual' : 'Generate Kode Master Random', async (pin) => {
+      setLoading(true);
+      try {
+        const body: any = { pin };
+        if (useInput) body.kode = inputKode.trim();
+        const r = await fetch('/api/owner/master-otp', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }).then(x => x.json());
+        if (r.ok) {
+          setKode(r.kode);
+          setUpdatedAt(r.updatedAt);
+          setInputKode('');
+          showMsg('ok', `Kode master diupdate: ${r.kode}`);
+          load();
+        } else {
+          showMsg('err', r.msg ?? 'Gagal');
+        }
+      } catch (e) {
+        showMsg('err', 'Error: ' + String(e));
+      }
+      setLoading(false);
+    });
+  }
+
+  return (
+    <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
+      <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>🔐 OTP Master Code</div>
+      <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 16 }}>
+        Kode darurat 6 digit. Berlaku saat OTP Telegram tidak masuk (jaringan, bot down, dll).
+        Kasir/Admin bisa pakai kode ini sebagai pengganti OTP login.
+        <b> Wajib dirahasiakan & rotate berkala.</b> OWNER tidak butuh OTP login.
+      </p>
+
+      {msg && (
+        <div className={`alert alert-${msg.type === 'ok' ? 'success' : 'danger'}`} style={{ marginBottom: 12 }}>
+          {msg.text}
+        </div>
+      )}
+
+      <div className="card" style={{ padding: 16, maxWidth: 500, marginBottom: 16 }}>
+        <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>Kode Master Saat Ini:</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <code style={{
+            fontSize: 32, fontWeight: 800, letterSpacing: 6,
+            fontFamily: 'var(--mono, monospace)',
+            color: show ? 'var(--accent)' : 'var(--text3)',
+            userSelect: show ? 'all' : 'none',
+          }}>
+            {kode ? (show ? kode : '••••••') : '—'}
+          </code>
+          <button className="btn btn-outline btn-sm" onClick={() => setShow(v => !v)}>
+            {show ? '🙈 Sembunyikan' : '👁️ Tampilkan'}
+          </button>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8 }}>
+          Update terakhir: {updatedAt ? new Date(updatedAt).toLocaleString('id-ID') : '—'}
+          {updatedBy ? ` oleh ${updatedBy}` : ''}
+        </div>
+      </div>
+
+      <div className="card" style={{ padding: 16, maxWidth: 500 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Rotate Kode Master</div>
+
+        <button className="btn btn-primary btn-sm" onClick={() => rotate(false)} disabled={loading}
+          style={{ marginBottom: 14 }}>
+          🎲 Generate Random 6 Digit
+        </button>
+
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6 }}>Atau set manual:</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="text" inputMode="numeric" maxLength={6} placeholder="000000"
+              value={inputKode}
+              onChange={e => setInputKode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              style={{
+                fontFamily: 'var(--mono, monospace)', fontSize: 18,
+                letterSpacing: 4, textAlign: 'center', flex: 1,
+              }}
+              disabled={loading}
+            />
+            <button className="btn btn-primary btn-sm"
+              onClick={() => rotate(true)}
+              disabled={loading || inputKode.length !== 6}>
+              ✓ Set
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
