@@ -250,6 +250,27 @@ export async function getLaporanMalam(
   const gadaiFiltered = gadaiRaw ?? [];  // akad asli tetap muncul di 'Gadai Baru' (Opsi C)
   const sjbFiltered   = sjbRaw   ?? [];  // SJB akad asli tetap muncul
 
+  // jumlahLamaMap: override jumlah_gadai akad asli ke nilai AWAL (sebelum
+  // TAMBAH/KURANG update tb_gadai). tb_tebus.jumlah_gadai menyimpan nilai
+  // sebelum perubahan -> dipakai sbg map. Konsisten dgn dashboard.
+  const jumlahLamaMap: Record<string, number> = {};
+  (tebusRaw ?? []).forEach((r: any) => {
+    const st = String(r.status ?? '').toUpperCase();
+    if (st === 'TAMBAH' || st === 'KURANG') {
+      const nf = String(r.no_faktur ?? '').trim().toUpperCase();
+      jumlahLamaMap[nf] = Number(r.jumlah_gadai ?? 0);
+    }
+  });
+
+  // Override gadaiFiltered.jumlah_gadai ke nilai akad asli kalau ada di map
+  const gadaiWithOriginal = gadaiFiltered.map((r: any) => {
+    const nf = String(r.no_faktur ?? '').trim().toUpperCase();
+    if (jumlahLamaMap[nf] !== undefined) {
+      return { ...r, jumlah_gadai: jumlahLamaMap[nf] };
+    }
+    return r;
+  });
+
   // Inject TAMBAH/KURANG sbg row di "Gadai Baru" pakai jumlah baru
   const tambahKurangInjected = (tebusRaw ?? []).filter((r: any) => {
     const st = String(r.status ?? '').toUpperCase();
@@ -271,7 +292,7 @@ export async function getLaporanMalam(
   let tebusMasuk = 0, perpanjangMasuk = 0, buybackMasuk = 0;
   let labaTotal = 0;
 
-  gadaiFiltered.forEach((r: any) => { gadaiKeluar += Number(r.jumlah_gadai ?? 0); });
+  gadaiWithOriginal.forEach((r: any) => { gadaiKeluar += Number(r.jumlah_gadai ?? 0); });
   tambahKurangInjected.forEach(r => { gadaiKeluar += Number(r.jumlah_gadai ?? 0); });
   sjbFiltered.forEach((r: any) => { sjbKeluar += Number(r.harga_jual ?? 0); });
 
@@ -339,7 +360,7 @@ export async function getLaporanMalam(
       waktuOperasional:  (outletRow as any).waktu_operasional ?? '',
     },
     cetakInfo: { tglCetak, jamCetak },
-    gadaiList:  [...gadaiFiltered, ...tambahKurangInjected],
+    gadaiList:  [...gadaiWithOriginal, ...tambahKurangInjected],
     sjbList:    sjbFiltered.map((r: any) => ({ ...r, jumlah_gadai: r.harga_jual })),
     tebusList:  tebusRaw   ?? [],
     buybackList: buybackRaw ?? [],

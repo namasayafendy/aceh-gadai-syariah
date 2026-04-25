@@ -229,7 +229,7 @@ export async function GET(request: NextRequest) {
       // gadaiList: row akad baru (filter exclude yg hari ini PERPANJANG/TAMBAH/KURANG)
       //           + row TAMBAH/KURANG (jumlah_gadai = jumlah_gadai_baru, _ket penanda)
       // sjbList:  row akad SJB baru (filter exclude yg hari ini PERPANJANG)
-      gadaiList:  [...gadaiFiltered, ...tambahKurangInjected],
+      gadaiList:  [...gadaiWithOriginal, ...tambahKurangInjected],
       sjbList:    sjbFiltered.map(r => ({ ...r, jumlah_gadai: r.harga_jual })),
       tebusList:  tebusRaw   ?? [],
       buybackList: buybackRaw ?? [],
