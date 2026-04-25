@@ -184,11 +184,9 @@ export default function TebusPage() {
 
     // Auto-fill taksiran for JUAL/SITA
     if (tebusStatus === 'JUAL') setTaksiranJualRaw(taksiran > 0 ? taksiran.toLocaleString('id-ID') : '');
-    // SITA: default = pinjaman + ujrah berjalan (total bayar sistem), bisa diedit kasir
+    // SITA: default = harga taksiran. Bisa diedit kasir; berapapun yg diisi bisa submit.
     if (tebusStatus === 'SITA') {
-      const sitaDefault = jmlGadai + ujrah;
-      const sitaRounded = sitaDefault > 0 ? Math.ceil(sitaDefault / 1000) * 1000 : taksiran;
-      setTaksiranSitaRaw(sitaRounded > 0 ? sitaRounded.toLocaleString('id-ID') : '');
+      setTaksiranSitaRaw(taksiran > 0 ? taksiran.toLocaleString('id-ID') : '');
     }
 
     // Auto-fill ujrah baru perpanjang = ujrah lama (bisa diedit kasir)
@@ -362,7 +360,11 @@ export default function TebusPage() {
           sisaKonsumen, jumlahGadaiBaru: jmlGadaiBaru,
           ujrahBaru: ['TAMBAH', 'KURANG'].includes(tebusStatus) ? parseMoney(ujrahBaruRaw) : 0,
           hariAktual, ujrahBerjalan, totalTebusSistem: totalSistem,
-          jumlahBayar: jmlBayar, jumlahDibayarkan: jmlBayar,
+          // SITA: jumlahBayar diisi nilai sita (taksiranSitaRaw) supaya laba terhitung
+          // = nilai_sita - jumlah_gadai. Alur kas TIDAK BERUBAH karena pakai
+          // taksiranSita field di kas.ts SITA case.
+          jumlahBayar: tebusStatus === 'SITA' ? parseMoney(taksiranSitaRaw) : jmlBayar,
+          jumlahDibayarkan: tebusStatus === 'SITA' ? parseMoney(taksiranSitaRaw) : jmlBayar,
           alasan: alasan.trim(), payment: payment === 'SPLIT' ? 'SPLIT' : payment,
           cash: cashVal, bank: bankVal,
           // Fase 3: id_diskon yg sudah di-approve Owner (hanya dikirim kalau butuh approval)
@@ -654,7 +656,7 @@ export default function TebusPage() {
                   <label>Taksiran (Modal Gudang Sita)</label>
                   <input value={taksiranSitaRaw} inputMode="numeric"
                     onChange={e => setTaksiranSitaRaw(formatMoneyInput(e.target.value))} />
-                  <div className="hint">Default = pinjaman + ujrah. Bisa diedit.</div>
+                  <div className="hint">Default = harga taksiran. Bisa diedit; berapapun bisa di-submit.</div>
                 </div>
               )}
 

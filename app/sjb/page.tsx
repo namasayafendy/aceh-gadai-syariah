@@ -223,10 +223,11 @@ export default function SJBPage() {
     let total = 0;
     if (bbStatus === 'BUYBACK') total = hbb;
     else if (bbStatus === 'PERPANJANG') total = Math.ceil((hbb - hj) / 1000) * 1000; // ujrah portion
-    else if (bbStatus === 'SITA') total = hj;
+    else if (bbStatus === 'SITA') total = hbb;       // SITA default = harga buyback (bisa diedit kasir)
     if (total > 0) total = Math.ceil(total / 1000) * 1000;
     setBbTotalSistem(total);
-    if (bbStatus !== 'SITA') setBbJmlBayarRaw(total > 0 ? total.toLocaleString('id-ID') : '');
+    // Auto-fill jumlah bayar utk semua status (termasuk SITA agar bisa diedit dr nilai default)
+    setBbJmlBayarRaw(total > 0 ? total.toLocaleString('id-ID') : '');
   }, [bbStatus, bbData]);
 
   // FIX: validasi client-side sesuai GAS (diskon, tanpaSurat, catatan wajib)
@@ -332,7 +333,9 @@ export default function SJBPage() {
           pin, status: bbStatus, idSJB: bbData.id, noSJB: bbData.no_faktur,
           barcodeA: bbData.barcode_a, nama: bbData.nama,
           kategori: bbData.kategori, barang: bbData.barang,
-          taksiran: bbData.taksiran || bbData.harga_jual,
+          // SITA: taksiran = nilai sita yg dimasukkan kasir (default harga buyback, bisa diedit).
+          // generateKas pakai field ini sbg taksiranSita -> nilai modal masuk gudang sita.
+          taksiran: bbStatus === 'SITA' ? (parseMoney(bbJmlBayarRaw) || bbData.taksiran || bbData.harga_jual) : (bbData.taksiran || bbData.harga_jual),
           hargaJual: bbData.harga_jual,
           hariAktual: _hariAkt, ujrahBerjalan: 0,
           totalSistem: bbTotalSistem, jumlahBayar: jmlBayar,
@@ -605,6 +608,13 @@ export default function SJBPage() {
                       </div>
                     </div>
 
+                    {bbStatus === 'SITA' && (
+                      <div className="form-group">
+                        <label>Nilai Sita *</label>
+                        <input value={bbJmlBayarRaw} inputMode="numeric" onChange={e => setBbJmlBayarRaw(formatMoneyInput(e.target.value))} />
+                        <div className="hint">Default = harga buyback. Bisa diedit. Berapapun yg di-isi tetap bisa submit.</div>
+                      </div>
+                    )}
                     {bbStatus !== 'SITA' && (
                       <>
                         <div className="form-group">
