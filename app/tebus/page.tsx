@@ -650,14 +650,27 @@ export default function TebusPage() {
                 </div>
               )}
 
-              {/* SITA: taksiran modal */}
+              {/* SITA: taksiran modal + catatan (wajib kalau tanpa surat) */}
               {tebusStatus === 'SITA' && (
-                <div className="form-group">
-                  <label>Taksiran (Modal Gudang Sita)</label>
-                  <input value={taksiranSitaRaw} inputMode="numeric"
-                    onChange={e => setTaksiranSitaRaw(formatMoneyInput(e.target.value))} />
-                  <div className="hint">Default = harga taksiran. Bisa diedit; berapapun bisa di-submit.</div>
-                </div>
+                <>
+                  <div className="form-group">
+                    <label>Taksiran (Modal Gudang Sita)</label>
+                    <input value={taksiranSitaRaw} inputMode="numeric"
+                      onChange={e => setTaksiranSitaRaw(formatMoneyInput(e.target.value))} />
+                    <div className="hint">Default = harga taksiran. Bisa diedit; berapapun bisa di-submit.</div>
+                  </div>
+                  <div className="form-group">
+                    <label>
+                      Catatan / Alasan
+                      {tanpaSurat ? <span style={{ color: 'var(--red)' }}> * wajib (transaksi tanpa surat)</span> : null}
+                    </label>
+                    <input
+                      value={alasan}
+                      onChange={e => setAlasan(e.target.value)}
+                      placeholder={tanpaSurat ? 'Wajib isi: alasan tanpa surat / kondisi barang' : 'Catatan opsional'}
+                    />
+                  </div>
+                </>
               )}
 
               {/* PEMBAYARAN */}
