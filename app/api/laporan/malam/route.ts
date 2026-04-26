@@ -119,8 +119,18 @@ export async function GET(request: NextRequest) {
     const isReissue = (r: any) =>
       reissueNoFakturs.has(String(r.no_faktur ?? '').trim().toUpperCase());
 
-    const gadaiFiltered = gadaiRaw ?? [];  // akad asli tetap muncul di 'Gadai Baru' (Opsi C)
-    const sjbFiltered   = sjbRaw   ?? [];  // SJB akad asli tetap muncul
+    // Filter akad asli "Gadai Baru": hanya yg MEMANG dibuat di tanggal laporan
+    // (created_at sama hari dgn tgl_gadai). Akad lama yg tgl_gadai-nya di-update
+    // oleh TAMBAH/KURANG/PERPANJANG hari ini -> exclude. Kasus akad baru + TAMBAH
+    // di hari yg sama -> keduanya tetap muncul. Pakai shift +7h utk Asia/Jakarta.
+    const sameJktDate = (a: any, b: any): boolean => {
+      if (!a || !b) return true;
+      const da = new Date(a); da.setUTCHours(da.getUTCHours() + 7);
+      const db_ = new Date(b); db_.setUTCHours(db_.getUTCHours() + 7);
+      return da.toISOString().slice(0, 10) === db_.toISOString().slice(0, 10);
+    };
+    const gadaiFiltered = (gadaiRaw ?? []).filter((r: any) => sameJktDate(r.created_at, r.tgl_gadai));
+    const sjbFiltered   = (sjbRaw   ?? []).filter((r: any) => sameJktDate(r.created_at, r.tgl_gadai));
 
     // jumlahLamaMap: override jumlah_gadai akad asli ke nilai AWAL (sebelum
     // TAMBAH/KURANG update tb_gadai). Konsisten dgn dashboard.
