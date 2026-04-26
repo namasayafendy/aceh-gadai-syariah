@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     // ── Gadai akad baru ───────────────────────────────────────
     const { data: gadaiRaw } = await db
       .from('tb_gadai')
-      .select('no_faktur,nama,kategori,barang,jumlah_gadai,taksiran,payment,kasir,status')
+      .select('no_faktur,nama,kategori,barang,jumlah_gadai,taksiran,payment,kasir,status,created_at,tgl_gadai')
       .eq('outlet', outletName)
       .gte('tgl_gadai', tgl + 'T00:00:00+07:00')
       .lte('tgl_gadai', tgl + 'T23:59:59+07:00')
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     // ── SJB akad baru ─────────────────────────────────────────
     const { data: sjbRaw } = await db
       .from('tb_sjb')
-      .select('no_faktur,nama,kategori,barang,harga_jual,payment,kasir,status')
+      .select('no_faktur,nama,kategori,barang,harga_jual,payment,kasir,status,created_at,tgl_gadai')
       .eq('outlet', outletName)
       .gte('tgl_gadai', tgl + 'T00:00:00+07:00')
       .lte('tgl_gadai', tgl + 'T23:59:59+07:00')
