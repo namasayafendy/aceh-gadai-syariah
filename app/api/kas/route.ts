@@ -102,7 +102,8 @@ export async function GET(request: NextRequest) {
 
     const tglFrom = searchParams.get('tglFrom') ?? null;  // yyyy-MM-dd
     const tglTo   = searchParams.get('tglTo')   ?? null;
-    const filter  = searchParams.get('filter')  ?? null;  // CASH | BANK | null
+    const filter      = searchParams.get('filter')     ?? null;  // CASH | BANK | null
+    const filterTipe  = searchParams.get('filterTipe') ?? null;  // MASUK | KELUAR | null
 
     // Ambil outlet name untuk filter
     const { data: outlet } = await db.from('outlets').select('nama').eq('id', outletId).single();
@@ -142,9 +143,13 @@ export async function GET(request: NextRequest) {
       if (tglFrom && tglStr < tglFrom) continue;
       if (tglTo   && tglStr > tglTo)   continue;
 
-      // Apply filter tipe kas
+      // Apply filter tipe kas (CASH / BANK)
       if (filter === 'CASH' && tipeKas !== 'CASH') continue;
       if (filter === 'BANK' && tipeKas !== 'BANK') continue;
+
+      // Apply filter tipe transaksi (MASUK / KELUAR)
+      if (filterTipe === 'MASUK'  && tipe !== 'MASUK')  continue;
+      if (filterTipe === 'KELUAR' && tipe !== 'KELUAR') continue;
 
       // Skip entri BATAL dari total masuk/keluar periode
       // (tidak di-skip dari running agar saldo tetap akurat)

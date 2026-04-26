@@ -33,6 +33,7 @@ export default function BukuKasPage() {
   const [dateFrom, setDateFrom] = useState(todayISO());
   const [dateTo, setDateTo] = useState(todayISO());
   const [filterKas, setFilterKas] = useState('');
+  const [filterTipe, setFilterTipe] = useState('');  // '' | MASUK | KELUAR
 
   // Manual entry
   const [mTipe, setMTipe] = useState('MASUK');
@@ -58,6 +59,7 @@ export default function BukuKasPage() {
       if (dateFrom) url += `&tglFrom=${dateFrom}`;
       if (dateTo) url += `&tglTo=${dateTo}`;
       if (filterKas) url += `&filter=${filterKas}`;
+      if (filterTipe) url += `&filterTipe=${filterTipe}`;
       const res = await fetch(url);
       const json = await res.json();
       if (json.ok) {
@@ -68,7 +70,7 @@ export default function BukuKasPage() {
       }
     } catch { /* silent */ }
     setLoading(false);
-  }, [outletId, dateFrom, dateTo, filterKas]);
+  }, [outletId, dateFrom, dateTo, filterKas, filterTipe]);
 
   useEffect(() => { loadKas(); }, [loadKas]);
 
@@ -227,7 +229,12 @@ export default function BukuKasPage() {
               <option value="CASH">Cash</option>
               <option value="BANK">Bank</option>
             </select>
-            <button className="btn btn-outline btn-sm" onClick={() => { setDateFrom(todayISO()); setDateTo(todayISO()); setFilterKas(''); }}>Reset</button>
+            <select value={filterTipe} onChange={e => setFilterTipe(e.target.value)} style={{ width: 120, fontSize: 12, padding: '7px 10px' }}>
+              <option value="">Semua Tipe</option>
+              <option value="MASUK">Masuk</option>
+              <option value="KELUAR">Keluar</option>
+            </select>
+            <button className="btn btn-outline btn-sm" onClick={() => { setDateFrom(todayISO()); setDateTo(todayISO()); setFilterKas(''); setFilterTipe(''); }}>Reset</button>
             <button className="btn btn-primary btn-sm" onClick={loadKas}>↻ Muat</button>
           </div>
 
