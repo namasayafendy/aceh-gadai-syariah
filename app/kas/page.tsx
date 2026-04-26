@@ -123,6 +123,83 @@ export default function BukuKasPage() {
     } catch (e) { setSaError('Error: ' + (e as Error).message); }
   }
 
+  // ── Print Buku Kas ke PDF (popup window, user klik Print di browser) ──
+  function printKas() {
+    if (rows.length === 0) { alert('Tidak ada data untuk dicetak.'); return; }
+    const fmtTgl = (s: string) => s ? new Date(s).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+    const fD = (d: string) => d ? new Date(d).toLocaleDateString('id-ID') : '—';
+    const periode = `${fD(dateFrom)} s/d ${fD(dateTo)}`;
+    const filterLabel: string[] = [];
+    if (filterKas)  filterLabel.push(filterKas === 'CASH' ? 'Cash' : 'Bank');
+    if (filterTipe) filterLabel.push(filterTipe === 'MASUK' ? 'Masuk' : 'Keluar');
+    const filterStr = filterLabel.length ? filterLabel.join(' — ') : 'Semua';
+
+    const trBaris = rows.map((r, i) => `
+      <tr style="border-bottom:1px solid #ddd">
+        <td>${i + 1}</td>
+        <td style="font-size:9px">${fmtTgl(r.tgl)}</td>
+        <td style="font-size:9px">${r.keterangan || '—'}</td>
+        <td style="text-align:center"><span style="background:${r.tipe === 'MASUK' ? '#d1fae5' : '#fee2e2'};color:${r.tipe === 'MASUK' ? '#065f46' : '#991b1b'};padding:1px 5px;border-radius:3px;font-size:8px;font-weight:700">${r.tipe}</span></td>
+        <td style="text-align:center"><span style="background:${r.tipe_kas === 'CASH' ? '#fef3c7' : '#dbeafe'};color:${r.tipe_kas === 'CASH' ? '#92400e' : '#1e40af'};padding:1px 5px;border-radius:3px;font-size:8px;font-weight:700">${r.tipe_kas}</span></td>
+        <td class="num" style="color:${r.tipe === 'MASUK' ? '#065f46' : '#991b1b'};font-weight:bold">${(r.tipe === 'MASUK' ? '+' : '-')}${'Rp ' + Number(r.jumlah || 0).toLocaleString('id-ID')}</td>
+        <td class="num">${'Rp ' + Number((r as any).saldoCash || 0).toLocaleString('id-ID')}</td>
+        <td class="num">${'Rp ' + Number((r as any).saldoBank || 0).toLocaleString('id-ID')}</td>
+        <td style="font-size:8px">${(r as any).sumber || '—'}</td>
+      </tr>`).join('');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+      <title>Buku Kas ${periode}</title>
+      <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        @page{size:A4 landscape;margin:8mm}
+        body{font-family:Arial,sans-serif;font-size:10px;padding:6mm;color:#000}
+        h2{font-size:14px;margin-bottom:4px}
+        table{width:100%;border-collapse:collapse;margin-top:8px}
+        th,td{padding:4px 6px;border:1px solid #ccc;text-align:left;vertical-align:top}
+        th{font-weight:bold;font-size:9px;background:#f0f0f0}
+        .num{text-align:right;font-family:monospace}
+        .summary{display:flex;gap:16px;margin:6px 0 4px;font-size:10px;flex-wrap:wrap}
+        .summary div{padding:4px 8px;border:1px solid #aaa;border-radius:3px}
+        .noprint{margin-bottom:8px}
+        @media print{.noprint{display:none}}
+      </style></head><body>
+      <div class="noprint">
+        <button onclick="window.print()" style="padding:5px 14px;margin-right:6px">🖨️ Print / Simpan PDF</button>
+        <button onclick="window.close()">Tutup</button>
+      </div>
+      <h2>BUKU KAS</h2>
+      <p style="font-size:10px;color:#555">Periode: <b>${periode}</b> &nbsp;|&nbsp; Filter: <b>${filterStr}</b> &nbsp;|&nbsp; Total entri: <b>${rows.length}</b></p>
+      <div class="summary">
+        <div>Total Masuk: <b style="color:#065f46">Rp ${totalMasuk.toLocaleString('id-ID')}</b></div>
+        <div>Total Keluar: <b style="color:#991b1b">Rp ${totalKeluar.toLocaleString('id-ID')}</b></div>
+        <div>Saldo Cash: <b>Rp ${saldo.cash.toLocaleString('id-ID')}</b></div>
+        <div>Saldo Bank: <b>Rp ${saldo.bank.toLocaleString('id-ID')}</b></div>
+      </div>
+      <table>
+        <thead><tr>
+          <th style="width:24px">No</th>
+          <th>Tanggal</th>
+          <th>Keterangan</th>
+          <th style="width:50px">Tipe</th>
+          <th style="width:48px">Kas</th>
+          <th class="num">Jumlah</th>
+          <th class="num">Saldo Cash</th>
+          <th class="num">Saldo Bank</th>
+          <th>Sumber</th>
+        </tr></thead>
+        <tbody>${trBaris}</tbody>
+      </table>
+      <p style="margin-top:14px;font-size:8px;color:#888">Dicetak: ${new Date().toLocaleString('id-ID')}</p>
+      </body></html>`;
+
+    const win = window.open('', '_blank', 'width=1200,height=800,scrollbars=yes');
+    if (!win) { alert('Izinkan popup untuk mencetak.'); return; }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 600);
+  }
+
   return (
     <AppShell title="Buku Kas" subtitle="Entri kas & running balance">
       <div style={{ display: 'flex', gap: 20, height: '100%', overflow: 'hidden' }}>
@@ -236,6 +313,7 @@ export default function BukuKasPage() {
             </select>
             <button className="btn btn-outline btn-sm" onClick={() => { setDateFrom(todayISO()); setDateTo(todayISO()); setFilterKas(''); setFilterTipe(''); }}>Reset</button>
             <button className="btn btn-primary btn-sm" onClick={loadKas}>↻ Muat</button>
+            <button className="btn btn-outline btn-sm" onClick={printKas} disabled={rows.length === 0}>🖨️ Cetak ({rows.length})</button>
           </div>
 
           {/* Table */}
