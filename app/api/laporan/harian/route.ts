@@ -28,10 +28,10 @@ export async function GET(request: NextRequest) {
     // Gadai for this date (exclude BATAL)
     let gadaiQ = db.from('tb_gadai')
       .select('*')
-      .gte('tgl_gadai', dayStart)
-      .lte('tgl_gadai', dayEnd)
+      .gte('created_at', dayStart)
+      .lte('created_at', dayEnd)
       .neq('status', 'BATAL')
-      .order('tgl_gadai', { ascending: false });
+      .order('created_at', { ascending: false });
     if (outletFilter) gadaiQ = gadaiQ.eq('outlet', outletFilter);
     const { data: gadai } = await gadaiQ;
 
@@ -47,10 +47,10 @@ export async function GET(request: NextRequest) {
     // SJB for this date
     let sjbQ = db.from('tb_sjb')
       .select('*')
-      .gte('tgl_gadai', dayStart)
-      .lte('tgl_gadai', dayEnd)
+      .gte('created_at', dayStart)
+      .lte('created_at', dayEnd)
       .neq('status', 'BATAL')
-      .order('tgl_gadai', { ascending: false });
+      .order('created_at', { ascending: false });
     if (outletFilter) sjbQ = sjbQ.eq('outlet', outletFilter);
     const { data: sjb } = await sjbQ;
 

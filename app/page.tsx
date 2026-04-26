@@ -96,22 +96,11 @@ export default function DashboardPage() {
     jumlahLamaMap[nf] = Number(r.jumlah_gadai ?? 0);
   });
 
-  // Helper: dua timestamp tsz ada di tanggal yg sama menurut zona Asia/Jakarta.
-  // Pakai shift +7h karena DB simpan UTC. Robust utk transaksi malam (jam 02:00 WIB).
-  const sameJktDate = (a: any, b: any): boolean => {
-    if (!a || !b) return true;
-    const da = new Date(a); da.setUTCHours(da.getUTCHours() + 7);
-    const db_ = new Date(b); db_.setUTCHours(db_.getUTCHours() + 7);
-    return da.toISOString().slice(0, 10) === db_.toISOString().slice(0, 10);
-  };
-
-  // Filter akad asli "Gadai Baru": hanya yg MEMANG dibuat hari ini (created_at sama
-  // hari dgn tgl_gadai). Akad lama yg tgl_gadai-nya di-update oleh TAMBAH/KURANG/
-  // PERPANJANG hari ini → exclude (transaksi TAMBAH/KURANG hari ini tampil sbg row
-  // terpisah lewat tambahKurangRows). Kasus dimana akad baru + TAMBAH terjadi di
-  // hari yg sama → keduanya tetap muncul (created_at == tgl_gadai date).
-  const gadaiFiltered = gadaiRaw.filter(r => sameJktDate(r.created_at, r.tgl_gadai));
-  const sjbFiltered   = sjbRaw.filter(r => sameJktDate(r.created_at, r.tgl_gadai));
+  // API /api/laporan/harian sudah filter created_at di range hari ini -> semua
+  // row di gadaiRaw / sjbRaw memang akad yg dibuat hari ini. Tidak perlu filter
+  // tambahan client-side.
+  const gadaiFiltered = gadaiRaw;
+  const sjbFiltered   = sjbRaw;
 
   // Sort: by no_faktur ASC. Karena 'SBR-' < 'SJB-' alfabetis, SBR group
   // otomatis di atas SJB group. Akad asli (_ket='') sebelum injection

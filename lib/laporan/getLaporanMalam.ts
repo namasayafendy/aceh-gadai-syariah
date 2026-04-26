@@ -176,20 +176,20 @@ export async function getLaporanMalam(
     .from('tb_gadai')
     .select('no_faktur,nama,kategori,barang,jumlah_gadai,taksiran,payment,kasir,status,created_at,tgl_gadai')
     .eq('outlet', outletName)
-    .gte('tgl_gadai', tgl + 'T00:00:00+07:00')
-    .lte('tgl_gadai', tgl + 'T23:59:59+07:00')
+    .gte('created_at', tgl + 'T00:00:00+07:00')
+    .lte('created_at', tgl + 'T23:59:59+07:00')
     .neq('status', 'BATAL')
-    .order('tgl_gadai', { ascending: true });
+    .order('created_at', { ascending: true });
 
   // ── SJB akad baru ─────────────────────────────────────────
   const { data: sjbRaw } = await db
     .from('tb_sjb')
     .select('no_faktur,nama,kategori,barang,harga_jual,payment,kasir,status,created_at,tgl_gadai')
     .eq('outlet', outletName)
-    .gte('tgl_gadai', tgl + 'T00:00:00+07:00')
-    .lte('tgl_gadai', tgl + 'T23:59:59+07:00')
+    .gte('created_at', tgl + 'T00:00:00+07:00')
+    .lte('created_at', tgl + 'T23:59:59+07:00')
     .neq('status', 'BATAL')
-    .order('tgl_gadai', { ascending: true });
+    .order('created_at', { ascending: true });
 
   // ── Tebus + Buyback ───────────────────────────────────────
   const { data: tebusRaw } = await db
@@ -247,18 +247,10 @@ export async function getLaporanMalam(
   const isReissue = (r: any) =>
     reissueNoFakturs.has(String(r.no_faktur ?? '').trim().toUpperCase());
 
-  // Filter akad asli "Gadai Baru": hanya yg MEMANG dibuat di tanggal laporan
-  // (created_at sama hari dgn tgl_gadai). Akad lama yg tgl_gadai-nya di-update
-  // oleh TAMBAH/KURANG/PERPANJANG hari ini → exclude. Kasus akad baru + TAMBAH
-  // di hari yg sama → keduanya tetap muncul. Pakai shift +7h utk Asia/Jakarta.
-  const sameJktDate = (a: any, b: any): boolean => {
-    if (!a || !b) return true;
-    const da = new Date(a); da.setUTCHours(da.getUTCHours() + 7);
-    const db_ = new Date(b); db_.setUTCHours(db_.getUTCHours() + 7);
-    return da.toISOString().slice(0, 10) === db_.toISOString().slice(0, 10);
-  };
-  const gadaiFiltered = (gadaiRaw ?? []).filter((r: any) => sameJktDate(r.created_at, r.tgl_gadai));
-  const sjbFiltered   = (sjbRaw   ?? []).filter((r: any) => sameJktDate(r.created_at, r.tgl_gadai));
+  // Query sudah filter created_at di range tanggal laporan -> semua row akad
+  // yg memang DIBUAT di hari itu. Tidak perlu filter tambahan client-side.
+  const gadaiFiltered = gadaiRaw ?? [];
+  const sjbFiltered   = sjbRaw   ?? [];
 
   // jumlahLamaMap: override jumlah_gadai akad asli ke nilai AWAL (sebelum
   // TAMBAH/KURANG update tb_gadai). tb_tebus.jumlah_gadai menyimpan nilai
