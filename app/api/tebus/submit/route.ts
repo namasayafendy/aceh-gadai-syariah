@@ -234,7 +234,10 @@ export async function POST(request: NextRequest) {
     if (body.status === 'TAMBAH' || body.status === 'KURANG') {
       const tglJTNew   = new Date(now); tglJTNew.setDate(tglJTNew.getDate() + 30);
       const tglSitaNew = new Date(now); tglSitaNew.setDate(tglSitaNew.getDate() + 60);
+      // RESET status ke AKTIF — kontrak masih berjalan dgn jumlah baru.
+      // Tanpa reset, gadai hilang dari Jatuh Tempo / Cek Stok (filter status=AKTIF).
       await db.from('tb_gadai').update({
+        status:       'AKTIF',
         jumlah_gadai: Number(body.jumlahGadaiBaru ?? body.jumlahGadai),
         tgl_gadai:    now.toISOString(),
         tgl_jt:       tglJTNew.toISOString(),

@@ -239,7 +239,9 @@ export async function POST(request: NextRequest) {
     if (body.status === 'TAMBAH' || body.status === 'KURANG') {
       const tglJTNew   = new Date(now); tglJTNew.setDate(tglJTNew.getDate() + 30);
       const tglSitaNew = new Date(now); tglSitaNew.setDate(tglSitaNew.getDate() + 60);
+      // RESET status ke AKTIF — kontrak SJB masih berjalan dgn jumlah baru.
       await db.from('tb_sjb').update({
+        status:     'AKTIF',
         harga_jual: Number(body.hargaJualBaru ?? body.hargaJual),
         tgl_gadai:  now.toISOString(),
         tgl_jt:     tglJTNew.toISOString(),
