@@ -169,6 +169,7 @@ export default function SJBPage() {
       const res = await fetch(`/api/laporan/harian?tgl=${tgl}&outletId=${outletId}`);
       const json = await res.json();
       if (json.ok && json.sjb) setAkadTodayList(json.sjb);
+      if (json.ok && json.buyback) setBbTodayList(json.buyback);
     } catch { /* silent */ }
   }, [outletId]);
 
@@ -180,6 +181,7 @@ export default function SJBPage() {
   const [bbSearchError, setBbSearchError] = useState('');
   const [bbData, setBbData] = useState<any>(null);
   const [bbTanpaSurat, setBbTanpaSurat] = useState(false); // FIX: track tanpaSurat dari search
+  const [bbTodayList, setBbTodayList] = useState<any[]>([]);
   const [bbStatus, setBbStatus] = useState('');
   const [bbJmlBayarRaw, setBbJmlBayarRaw] = useState('');
   const [bbAlasan, setBbAlasan] = useState('');
@@ -367,6 +369,7 @@ export default function SJBPage() {
       setBbBarcode(''); setBbData(null); setBbStatus(''); setBbJmlBayarRaw(''); setBbAlasan(''); setBbTanpaSurat(false);
       // Fase 3: reset state approval setelah submit sukses
       setBbDiskonWaitId(null); setBbPendingSubmit(null); setBbDiskonParentId(null);
+      loadAkadToday(); // refresh tabel akad SJB hari ini + buyback hari ini
     } catch (e) { setBbError('Server error: ' + (e as Error).message); }
     setBbSubmitting(false);
   }
@@ -656,7 +659,19 @@ export default function SJBPage() {
             <div className="section-title">Buyback Hari Ini</div>
             <div className="tbl-wrap">
               <table><thead><tr><th>No SJB</th><th>Nama</th><th>Status</th><th className="num">Bayar</th><th>Kasir</th></tr></thead>
-                <tbody><tr><td colSpan={5} className="empty-state">—</td></tr></tbody>
+                <tbody>
+                  {bbTodayList.length === 0 ? (
+                    <tr><td colSpan={5} className="empty-state">—</td></tr>
+                  ) : bbTodayList.map((r: any, i: number) => (
+                    <tr key={i}>
+                      <td>{r.no_faktur ?? ''}</td>
+                      <td>{r.nama ?? ''}</td>
+                      <td>{r.status ?? ''}</td>
+                      <td className="num">{Number(r.jumlah_bayar ?? 0).toLocaleString('id-ID')}</td>
+                      <td>{r.kasir ?? ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
               </table>
             </div>
           </div>
