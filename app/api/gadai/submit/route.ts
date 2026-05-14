@@ -123,6 +123,14 @@ export async function POST(request: NextRequest) {
     // ── 9. Biaya admin ────────────────────────────────────────
     const biayaAdmin = Number(outlet.biaya_admin) || 10000;
 
+    // ── 9b. Ujrah final (prefer input kasir bila di-edit manual) ───
+    // FIX bug: response harus return ujrah yang benar-benar dipakai di
+    // kontrak (yaitu nilai edit kasir kalau ada), bukan hitung sistem.
+    // Sebelumnya breakdown ujrah di PDF kontrak selalu pakai bawaan
+    // sistem walau kasir sudah edit manual.
+    const ujrahNominalFinal = Number(body.ujrahNominal ?? ujrah.ujrahTotal);
+    const ujrahPersenFinal  = Number(body.ujrahPersen  ?? ujrah.persen);
+
     // ── 10. Insert tb_gadai ───────────────────────────────────
     const { error: insertErr } = await db.from('tb_gadai').insert({
       id:            idGadai,
@@ -142,8 +150,8 @@ export async function POST(request: NextRequest) {
       taksiran:      Number(body.taksiran),
       jumlah_gadai:  Number(body.jumlahGadai),
       biaya_admin:   biayaAdmin,
-      ujrah_persen:  Number(body.ujrahPersen ?? ujrah.persen),
-      ujrah_nominal: Number(body.ujrahNominal ?? ujrah.ujrahTotal),
+      ujrah_persen:  ujrahPersenFinal,
+      ujrah_nominal: ujrahNominalFinal,
       barcode_a:     barcodeA,
       barcode_b:     barcodeB,
       rak:           assignedRak,
@@ -219,8 +227,12 @@ export async function POST(request: NextRequest) {
       taksiran:    body.taksiran,
       jumlahGadai: body.jumlahGadai,
       biayaAdmin,
-      ujrahPersen:  ujrah.persen,
-      ujrahNominal: ujrah.ujrahTotal,
+      // ── return ujrah yang benar-benar tersimpan (prefer input kasir).
+      // Frontend butuh nilai ini supaya PDF kontrak (breakdown 1-5/6-10/
+      // dst untuk HP, atau ujrah/hari untuk emas) menampilkan ujrah hasil
+      // edit kasir, bukan bawaan sistem.
+      ujrahPersen:  ujrahPersenFinal,
+      ujrahNominal: ujrahNominalFinal,
     });
 
   } catch (err) {

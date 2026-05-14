@@ -572,17 +572,29 @@ export default function SJBPage() {
 
             {bbData && (
               <>
-                <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 12 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
-                    <div>No SJB: <b>{bbData.no_faktur}</b></div>
-                    <div>Status: <b>{bbData.status}</b></div>
-                    <div>Nama: <b>{bbData.nama}</b></div>
-                    <div>Kategori: <b>{bbData.kategori}</b></div>
-                    <div>Harga Jual: <b>{formatRp(bbData.harga_jual)}</b></div>
-                    <div>Buyback: <b>{formatRp(bbData.harga_buyback)}</b></div>
-                    <div style={{ gridColumn: 'span 2' }}>Barang: <b>{bbData.barang}</b></div>
-                  </div>
-                </div>
+                {(() => {
+                  // Hari berjalan = selisih hari kalender (Asia/Jakarta) antara tgl akad SJB dan hari ini.
+                  // Display only — tidak dipakai untuk hitung kas/ujrah/total bayar.
+                  const tglAkad = bbData.tgl_gadai ? new Date(bbData.tgl_gadai) : null;
+                  const hariBerjalan = tglAkad
+                    ? Math.max(0, Math.floor((Date.now() - tglAkad.getTime()) / 86400000))
+                    : 0;
+                  return (
+                    <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 12 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
+                        <div>No SJB: <b>{bbData.no_faktur}</b></div>
+                        <div>Status: <b>{bbData.status}</b></div>
+                        <div>Nama: <b>{bbData.nama}</b></div>
+                        <div>Kategori: <b>{bbData.kategori}</b></div>
+                        <div>Tgl Akad: <b>{formatDate(bbData.tgl_gadai)}</b></div>
+                        <div>Berjalan: <b>{hariBerjalan} hari</b></div>
+                        <div>Harga Jual: <b>{formatRp(bbData.harga_jual)}</b></div>
+                        <div>Buyback: <b>{formatRp(bbData.harga_buyback)}</b></div>
+                        <div style={{ gridColumn: 'span 2' }}>Barang: <b>{bbData.barang}</b></div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* FIX Bug 3: Warning tanpa surat (sesuai GAS) */}
                 {bbTanpaSurat && (
