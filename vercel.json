@@ -15,7 +15,7 @@
     },
     {
       "path": "/api/wa/cron-stale-alert",
-      "schedule": "0 * * * *"
+      "schedule": "0 5 * * *"
     },
     {
       "path": "/api/wa/cron-daily-summary",
