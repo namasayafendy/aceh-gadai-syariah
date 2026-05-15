@@ -13,6 +13,7 @@ import { createServiceClient } from '@/lib/supabase/server';
 import { generateKas } from '@/lib/db/kas';
 import { safeGetNextId } from '@/lib/db/counter';
 import type { TipeTransaksi, PaymentMethod } from '@/lib/db/kas';
+import { queueWA } from '@/lib/wa/sender';
 
 interface SubmitTebusBody {
   pin:               string;
@@ -307,6 +308,111 @@ export async function POST(request: NextRequest) {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta'
     });
+
+    // ── 13b. Fire-and-forget WA konfirmasi (NON-BLOCKING) ─────
+    // Mapping status -> template. Pakai try/catch supaya error WA tidak
+    // mempengaruhi response transaksi. queueWA() sendiri tidak throw,
+    // try/catch sini untuk safety extra (mis. async setup error).
+    try {
+      // Fetch telp dari tb_gadai (body tebus tidak include telp)
+      const { data: gadaiTelp } = await db
+        .from('tb_gadai')
+        .select('telp1, telp2')
+        .eq('id', body.idGadai)
+        .maybeSingle();
+      const telp1WA = (gadaiTelp as any)?.telp1 ?? '';
+      const telp2WA = (gadaiTelp as any)?.telp2 ?? undefined;
+
+      // Map status -> template_code
+      const TPL_MAP: Record<string, string> = {
+        TEBUS: 'TEBUS_OK',
+        PERPANJANG: 'PERPANJANG_OK',
+        TAMBAH: 'TAMBAH_OK',
+        KURANG: 'KURANG_OK',
+        SITA: 'SITA_GADAI_OK',
+        JUAL: 'JUAL_OK',
+      };
+      const tplCode = TPL_MAP[body.status];
+
+      // Build vars per status
+      let vars: Record<string, string | number> = {
+        nama: body.namaNasabah,
+        no_faktur: body.noFaktur,
+        barang: body.barang,
+      };
+      if (body.status === 'TEBUS') {
+        vars = { ...vars, jumlah_bayar: Number(body.jumlahBayar), tgl_tebus: tglFmt };
+      } else if (body.status === 'PERPANJANG') {
+        vars = { ...vars, jumlah_bayar: Number(body.jumlahBayar), tgl_jt_baru: tglJTBaru };
+      } else if (body.status === 'TAMBAH') {
+        vars = {
+          ...vars,
+          jumlah_lama: Number(body.jumlahGadai),
+          jumlah_baru: Number(body.jumlahGadaiBaru ?? 0),
+          selisih: Math.abs(Number(body.jumlahGadaiBaru ?? 0) - Number(body.jumlahGadai)),
+          tgl_jt: tglJTBaru,
+        };
+      } else if (body.status === 'KURANG') {
+        vars = {
+          ...vars,
+          jumlah_lama: Number(body.jumlahGadai),
+          jumlah_baru: Number(body.jumlahGadaiBaru ?? 0),
+          selisih: Math.abs(Number(body.jumlahGadai) - Number(body.jumlahGadaiBaru ?? 0)),
+          tgl_jt: tglJTBaru,
+        };
+      } else if (body.status === 'SITA') {
+        vars = { ...vars, tgl_sita: tglFmt };
+      } else if (body.status === 'JUAL') {
+        const totalKewajiban = Number(body.jumlahGadai) + Number(body.ujrahBerjalan);
+        const hargaJual = Number(body.taksiranJual ?? body.taksiran);
+        vars = {
+          ...vars,
+          harga_jual: hargaJual,
+          total_kewajiban: totalKewajiban,
+          selisih_kelebihan: Math.max(0, hargaJual - totalKewajiban),
+        };
+      }
+
+      if (tplCode) {
+        queueWA({
+          outletId,
+          templateCode: tplCode,
+          vars,
+          toNumber: telp1WA,
+          toNumber2: telp2WA,
+          refTable: 'tb_tebus',
+          refId: idTebus,
+          noFaktur: body.noFaktur,
+          namaNasabah: body.namaNasabah,
+        });
+      }
+
+      // Diskon confirm: kirim hanya kalau ada selisih > 0 dan status
+      // yang memang punya konsep diskon (TEBUS/PERPANJANG/TAMBAH/KURANG)
+      if (statusPerluDiskon && selisih > 0) {
+        queueWA({
+          outletId,
+          templateCode: 'DISKON_CONFIRM',
+          vars: {
+            nama: body.namaNasabah,
+            no_faktur: body.noFaktur,
+            ujrah_seharusnya: Number(body.ujrahBerjalan),
+            selisih: selisih,
+            jumlah_bayar: Number(body.jumlahBayar),
+            alasan: body.alasan ?? '',
+            wa_owner: '',
+          },
+          toNumber: telp1WA,
+          toNumber2: telp2WA,
+          refTable: 'tb_tebus',
+          refId: idTebus + '-DSK',
+          noFaktur: body.noFaktur,
+          namaNasabah: body.namaNasabah,
+        });
+      }
+    } catch (e) {
+      console.error('[tebus/submit] WA queue error (ignored):', e);
+    }
 
     return NextResponse.json({
       ok: true,

@@ -13,6 +13,7 @@ import { createServiceClient } from '@/lib/supabase/server';
 import { generateKas } from '@/lib/db/kas';
 import { safeGetNextId } from '@/lib/db/counter';
 import type { TipeTransaksi, PaymentMethod } from '@/lib/db/kas';
+import { queueWA } from '@/lib/wa/sender';
 
 interface SubmitBuybackBody {
   pin:              string;
@@ -311,6 +312,79 @@ export async function POST(request: NextRequest) {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta'
     });
+
+    // ── 12b. Fire-and-forget WA konfirmasi SJB buyback (NON-BLOCKING) ─
+    // Mapping status SJB -> template. Pakai try/catch supaya error WA
+    // tidak mempengaruhi response transaksi.
+    try {
+      const { data: sjbTelp } = await db
+        .from('tb_sjb')
+        .select('telp1, telp2')
+        .eq('id', body.idSJB)
+        .maybeSingle();
+      const telp1WA = (sjbTelp as any)?.telp1 ?? '';
+      const telp2WA = (sjbTelp as any)?.telp2 ?? undefined;
+
+      const TPL_MAP_SJB: Record<string, string> = {
+        BUYBACK: 'BUYBACK_OK',
+        PERPANJANG: 'PERPANJANG_SJB_OK',
+        SITA: 'SITA_SJB_OK',
+      };
+      const tplCode = TPL_MAP_SJB[body.status];
+
+      let vars: Record<string, string | number> = {
+        nama: body.nama,
+        no_faktur: body.noSJB,
+        barang: body.barang,
+      };
+      if (body.status === 'BUYBACK') {
+        vars = { ...vars, jumlah_bayar: Number(body.jumlahBayar), tgl_tebus: tglFmt };
+      } else if (body.status === 'PERPANJANG') {
+        vars = { ...vars, jumlah_bayar: Number(body.jumlahBayar), tgl_jt_baru: tglJTBaru };
+      } else if (body.status === 'SITA') {
+        vars = { ...vars, tgl_sita: tglFmt };
+      }
+
+      if (tplCode) {
+        queueWA({
+          outletId,
+          templateCode: tplCode,
+          vars,
+          toNumber: telp1WA,
+          toNumber2: telp2WA,
+          refTable: 'tb_buyback',
+          refId: idBB,
+          noFaktur: body.noSJB,
+          namaNasabah: body.nama,
+        });
+      }
+
+      // Diskon confirm: BUYBACK/PERPANJANG saja (SITA tidak kena diskon)
+      const statusPerluDiskonSjb = ['BUYBACK', 'PERPANJANG'].includes(body.status);
+      if (statusPerluDiskonSjb && selisih > 0) {
+        queueWA({
+          outletId,
+          templateCode: 'DISKON_CONFIRM',
+          vars: {
+            nama: body.nama,
+            no_faktur: body.noSJB,
+            ujrah_seharusnya: Number(body.totalSistem),
+            selisih: selisih,
+            jumlah_bayar: Number(body.jumlahBayar),
+            alasan: body.alasan ?? '',
+            wa_owner: '',
+          },
+          toNumber: telp1WA,
+          toNumber2: telp2WA,
+          refTable: 'tb_buyback',
+          refId: idBB + '-DSK',
+          noFaktur: body.noSJB,
+          namaNasabah: body.nama,
+        });
+      }
+    } catch (e) {
+      console.error('[sjb/buyback] WA queue error (ignored):', e);
+    }
 
     return NextResponse.json({
       ok: true,

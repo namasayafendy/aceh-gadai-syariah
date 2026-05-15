@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { generateKas } from '@/lib/db/kas';
 import { safeGetNextId, safeGetNextBarcodeA } from '@/lib/db/counter';
+import { queueWA } from '@/lib/wa/sender';
 
 interface SubmitSJBBody {
   pin:          string;
@@ -154,6 +155,32 @@ export async function POST(request: NextRequest) {
     const f = (d: Date) => d.toLocaleDateString('id-ID', {
       day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Jakarta',
     });
+
+    // ── 10b. Fire-and-forget WA konfirmasi SJB baru (NON-BLOCKING) ─
+    // Kalau outlet belum setup WA -> queueWA SKIP. Provider error -> log
+    // FAILED. Transaksi SJB tetap success.
+    try {
+      queueWA({
+        outletId,
+        templateCode: 'SJB_NEW',
+        vars: {
+          nama: body.nama?.trim() ?? '',
+          no_faktur: noSJB,
+          barang: body.barang,
+          harga_jual: hargaJual,
+          harga_buyback: hargaBuyback,
+          tgl_jt: f(tglJT),
+        },
+        toNumber: body.telp1 ?? '',
+        toNumber2: body.telp2 ?? undefined,
+        refTable: 'tb_sjb',
+        refId: idSJB,
+        noFaktur: noSJB,
+        namaNasabah: body.nama?.trim() ?? '',
+      });
+    } catch (e) {
+      console.error('[sjb/submit] WA queue error (ignored):', e);
+    }
 
     return NextResponse.json({
       ok: true,

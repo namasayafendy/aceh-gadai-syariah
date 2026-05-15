@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { generateKas } from '@/lib/db/kas';
 import { safeGetNextId, safeGetNextBarcodeA } from '@/lib/db/counter';
+import { queueWA } from '@/lib/wa/sender';
 
 // ─── Input validation ────────────────────────────────────────
 interface SubmitGadaiBody {
@@ -198,6 +199,33 @@ export async function POST(request: NextRequest) {
     const fmt = (d: Date) => d.toLocaleDateString('id-ID', {
       day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Jakarta'
     });
+
+    // ── 13b. Fire-and-forget WA konfirmasi (NON-BLOCKING) ─────
+    // Kalau outlet belum setup WA config -> queueWA SKIP gracefully.
+    // Kalau provider gagal -> log FAILED ke tb_wa_outgoing, transaksi
+    // tetap success. Tidak menyentuh alur kas.
+    try {
+      queueWA({
+        outletId,
+        templateCode: 'GADAI_NEW',
+        vars: {
+          nama: body.nama.trim(),
+          no_faktur: noFaktur,
+          barang: body.barang,
+          jumlah_gadai: Number(body.jumlahGadai),
+          tgl_jt: fmt(tglJT),
+          tgl_sita: fmt(tglSita),
+        },
+        toNumber: body.telp1 ?? '',
+        toNumber2: body.telp2 ?? undefined,
+        refTable: 'tb_gadai',
+        refId: idGadai,
+        noFaktur,
+        namaNasabah: body.nama.trim(),
+      });
+    } catch (e) {
+      console.error('[gadai/submit] WA queue error (ignored):', e);
+    }
 
     return NextResponse.json({
       ok: true,

@@ -30,6 +30,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/jatuhtempo',icon: '⏰', label: 'Jatuh Tempo',        section: 'Transaksi' },
   { href: '/transfer',  icon: '🏦', label: 'Transfer Approval',  section: 'Transaksi' },
   { href: '/diskon',    icon: '💸', label: 'Riwayat Diskon',     section: 'Transaksi' },
+  { href: '/wa-inbox',  icon: '💬', label: 'WA Inbox',           section: 'Transaksi' },
   { href: '/riwayat',   icon: '🔍', label: 'Cari Riwayat',       section: 'Transaksi' },
   // Gudang
   { href: '/stok',      icon: '📦', label: 'Cek Stok',           section: 'Gudang',  roles: ['ADMIN','OWNER'] },
@@ -41,6 +42,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/edit',      icon: '✏️', label: 'Edit Transaksi',     section: 'Admin',   roles: ['ADMIN','OWNER'] },
   { href: '/outlet',    icon: '⚙️', label: 'Settings Outlet',   section: 'Admin',   roles: ['OWNER'] },
   { href: '/settings/telegram', icon: '📱', label: 'Setup Telegram', section: 'Admin', roles: ['OWNER'] },
+  { href: '/wa-config', icon: '💬', label: 'WhatsApp Config',  section: 'Admin',   roles: ['OWNER'] },
   { href: '/owner',     icon: '👑', label: 'Dashboard Owner',   section: 'Owner',   roles: ['ADMIN','OWNER'] },
   { href: '/backup',    icon: '💾', label: 'Backup & Bon',       section: 'Admin',   roles: ['ADMIN','OWNER'] },
 ];
