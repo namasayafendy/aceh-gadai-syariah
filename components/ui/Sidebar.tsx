@@ -44,6 +44,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/settings/telegram', icon: '📱', label: 'Setup Telegram', section: 'Admin', roles: ['OWNER'] },
   { href: '/wa-config', icon: '💬', label: 'WhatsApp Config',  section: 'Admin',   roles: ['OWNER'] },
   { href: '/owner',     icon: '👑', label: 'Dashboard Owner',   section: 'Owner',   roles: ['ADMIN','OWNER'] },
+  { href: '/audit-log', icon: '📋', label: 'Audit Log',          section: 'Owner',   roles: ['OWNER'] },
   { href: '/backup',    icon: '💾', label: 'Backup & Bon',       section: 'Admin',   roles: ['ADMIN','OWNER'] },
 ];
 
